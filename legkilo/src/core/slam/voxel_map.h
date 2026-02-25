@@ -20,10 +20,10 @@ which is included as part of this source code package.
 
 #include <math.h>
 #include <pcl/common/io.h>
-#include <ros/ros.h>
 #include <unistd.h>
-#include <visualization_msgs/Marker.h>
-#include <visualization_msgs/MarkerArray.h>
+#include <rclcpp/rclcpp.hpp>
+#include <visualization_msgs/msg/marker.hpp>
+#include <visualization_msgs/msg/marker_array.hpp>
 #include <Eigen/Dense>
 #include <fstream>
 #include <mutex>
@@ -182,7 +182,8 @@ class VoxelMapManager {
     VoxelMapManager() = default;
     VoxelMapConfig config_setting_;
     int current_frame_id_ = 0;
-    ros::Publisher voxel_map_pub_;
+    // Note: In ROS2, publishers are handled differently - using shared_ptr
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr voxel_map_pub_;
     std::unordered_map<Eigen::Vector3i, VoxelOctoTree *, hash_vec<3>, equal_vec<3>> voxel_map_;
 
     CloudPtr feats_undistort_;
@@ -200,7 +201,7 @@ class VoxelMapManager {
 
     Eigen::Vector3d last_slide_position = {0, 0, 0};
 
-    geometry_msgs::Quaternion geoQuat_;
+    geometry_msgs::msg::Quaternion geoQuat_;
 
     int feats_down_size_;
     int effct_feat_num_;
@@ -226,7 +227,7 @@ class VoxelMapManager {
     void build_single_residual(pointWithVar &pv, const VoxelOctoTree *current_octo, const int current_layer,
                                bool &is_success, double &prob, PointToPlane &single_ptpl);
 
-    void pubVoxelMap();
+    void pubVoxelMap(rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr voxel_map_pub);
 
     bool mapSliding();
     void clearMemOutOfMap(const int &x_max, const int &x_min, const int &y_max, const int &y_min, const int &z_max,
@@ -235,10 +236,10 @@ class VoxelMapManager {
     void GetUpdatePlane(const VoxelOctoTree *current_octo, const int pub_max_voxel_layer,
                         std::vector<VoxelPlane> &plane_list);
 
-    void pubSinglePlane(visualization_msgs::MarkerArray &plane_pub, const std::string plane_ns,
+    void pubSinglePlane(visualization_msgs::msg::MarkerArray &plane_pub, const std::string plane_ns,
                         const VoxelPlane &single_plane, const float alpha, const Eigen::Vector3d rgb);
     void CalcVectQuation(const Eigen::Vector3d &x_vec, const Eigen::Vector3d &y_vec, const Eigen::Vector3d &z_vec,
-                         geometry_msgs::Quaternion &q);
+                         geometry_msgs::msg::Quaternion &q);
 
     void mapJet(double v, double vmin, double vmax, uint8_t &r, uint8_t &g, uint8_t &b);
 };

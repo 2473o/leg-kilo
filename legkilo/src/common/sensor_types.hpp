@@ -1,7 +1,7 @@
 #ifndef LEG_KILO_SENSOR_TYPES_H
 #define LEG_KILO_SENSOR_TYPES_H
 
-#include <sensor_msgs/Imu.h>
+#include <sensor_msgs/msg/imu.hpp>
 #include <deque>
 
 #include "pcl_types.h"
@@ -27,11 +27,11 @@ struct KinImuMeas {
 
 struct MeasGroup {
     LidarScan lidar_scan_;
-    std::deque<sensor_msgs::ImuPtr> imus_;
+    std::deque<sensor_msgs::msg::Imu::SharedPtr> imus_;
     std::deque<KinImuMeas> kin_imus_;
 };
 
-enum class LidarType { VEL = 1, OUSTER = 2, HESAI = 3 };
+enum class LidarType { VEL = 1, OUSTER = 2, HESAI = 3, Robosense = 4, UTLidar = 5 };
 
 }  // namespace common
 }  // namespace legkilo

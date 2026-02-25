@@ -71,6 +71,28 @@ POINT_CLOUD_REGISTER_POINT_STRUCT(hesai_ros::Point,
 )
 // clang-format on
 
+// clang-format off
+namespace robosense_ros {
+    struct Point {
+        PCL_ADD_POINT4D
+        PCL_ADD_INTENSITY;
+        uint16_t ring;
+        double timestamp;
+        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    } EIGEN_ALIGN16;
+} // namespace robosense_ros
+POINT_CLOUD_REGISTER_POINT_STRUCT (
+        robosense_ros::Point,
+        (float, x, x)
+        (float, y, y)
+        (float, z, z)
+        (float, intensity, intensity)
+        (uint16_t, ring, ring)
+        (double, timestamp, timestamp)
+)
+// clang-format on
+
+
 namespace legkilo {
 
 class LidarProcessing {
@@ -90,7 +112,7 @@ class LidarProcessing {
     ~LidarProcessing();
 
     common::LidarType getLidarType() const;
-    void processing(const sensor_msgs::PointCloud2::ConstPtr& msg, common::LidarScan& lidar_scan);
+    void processing(const sensor_msgs::msg::PointCloud2::SharedPtr& msg, common::LidarScan& lidar_scan);
 
     template <typename T>
     inline bool blindCheck(const T& p) {
@@ -98,9 +120,16 @@ class LidarProcessing {
     }
 
    private:
-    void velodyneHandler(const sensor_msgs::PointCloud2::ConstPtr& msg, common::LidarScan& lidar_scan);
-    void ousterHander(const sensor_msgs::PointCloud2::ConstPtr& msg, common::LidarScan& lidar_scan);
-    void hesaiHandler(const sensor_msgs::PointCloud2::ConstPtr& msg, common::LidarScan& lidar_scan);
+    void velodyneHandler(const sensor_msgs::msg::PointCloud2::SharedPtr& msg, common::LidarScan& lidar_scan);
+    void ousterHander(const sensor_msgs::msg::PointCloud2::SharedPtr& msg, common::LidarScan& lidar_scan);
+
+    void hesaiHandler(const sensor_msgs::msg::PointCloud2::SharedPtr& msg, common::LidarScan& lidar_scan);
+    void robosense_handler(const sensor_msgs::msg::PointCloud2::SharedPtr &msg,
+                            common::LidarScan& lidar_scan,
+                            int i_sub_cloud, int num_sub_cloud, double & start_time, double & end_time
+                        );
+    // void utlidar_handler(const sensor_msgs::msg::PointCloud2::UniquePtr &msg, common::LidarScan& lidar_scan);
+
     CloudPtr cloud_pcl_;
     Config config_;
 };

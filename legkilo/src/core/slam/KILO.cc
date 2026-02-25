@@ -4,6 +4,7 @@
 #include <cmath>
 #include <iomanip>
 #include <utility>
+#include <rclcpp/rclcpp.hpp>
 #include "common/math_utils.hpp"
 
 #include "common/glog_utils.hpp"
@@ -232,8 +233,8 @@ bool KILO::predictUpdatePoint(double current_time, size_t idx_i, size_t idx_j, c
     return effect_num > 0;
 }
 
-bool KILO::predictUpdateImu(const sensor_msgs::ImuPtr& imu) {
-    double current_time = imu->header.stamp.toSec();
+bool KILO::predictUpdateImu(const sensor_msgs::msg::Imu::SharedPtr& imu) {
+    double current_time = rclcpp::Time(imu->header.stamp).seconds();
     double dt_cov = current_time - last_state_update_time_;
     eskf_->predict(dt_cov, false, true);
     double dt = current_time - last_state_predict_time_;
@@ -378,7 +379,7 @@ bool KILO::process(common::MeasGroup measure, CloudPtr& cloud_down_body_out, Clo
             while (idx_j < pts_size && pts[idx_i].curvature == pts[idx_j].curvature) { idx_j++; }
 
             if (imu_mode_only_) {
-                while (!imus.empty() && imus.front()->header.stamp.toSec() < cur_point_time) {
+                while (!imus.empty() && rclcpp::Time(imus.front()->header.stamp).seconds() < cur_point_time) {
                     this->predictUpdateImu(imus.front());
                     imus.pop_front();
                 }
