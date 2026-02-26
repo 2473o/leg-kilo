@@ -1,5 +1,6 @@
 #include "interface/ros2/ros_interface.h"
 
+#include <glog/logging.h>
 #include <iomanip>
 #include <iostream>
 #include <utility>
@@ -186,6 +187,20 @@ void RosInterface::lidarCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr 
     std::lock_guard<std::mutex> lock(mutex_);
     double timestamp = rclcpp::Time(msg->header.stamp).seconds();
     static double last_scan_time = timestamp;
+    
+    // Record first lidar timestamp for dynamic time sync
+    if (first_lidar_time_ == 0.0) {
+        first_lidar_time_ = timestamp;
+        LOG(INFO) << "[TimeSync] First lidar timestamp: " << std::fixed << std::setprecision(6) << first_lidar_time_;
+        
+        // Calculate time offset if we have both first timestamps (kin_imu may have arrived first)
+        if (first_kin_imu_time_ > 0.0 && !time_offset_calculated_) {
+            lidar_time_offset_ = first_kin_imu_time_ - first_lidar_time_;
+            time_offset_calculated_ = true;
+            LOG(INFO) << "[TimeSync] Calculated lidar_time_offset: " << lidar_time_offset_
+                      << "s (kin_imu - lidar)";
+        }
+    }
 
     Timer::measure("Lidar Processing", [&, this]() {
         if (timestamp < last_scan_time) {
@@ -195,6 +210,13 @@ void RosInterface::lidarCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr 
 
         common::LidarScan lidar_scan;
         lidar_processing_->processing(msg, lidar_scan);
+        
+        // Apply dynamic time offset to lidar scan timestamps
+        if (time_offset_calculated_) {
+            lidar_scan.lidar_end_time_ += lidar_time_offset_;
+            lidar_scan.lidar_begin_time_ += lidar_time_offset_;
+        }
+        
         lidar_cache_.push_back(lidar_scan);
         last_scan_time = timestamp;
     });
@@ -239,6 +261,21 @@ void RosInterface::kinematicImuCallBack(const go2_driver::msg::LegSensor::Shared
     double timestamp = rclcpp::Time(msg->header.stamp).seconds();
     {
         std::lock_guard<std::mutex> lock(mutex_);
+        
+        // Record first kin_imu timestamp for dynamic time sync
+        if (first_kin_imu_time_ == 0.0) {
+            first_kin_imu_time_ = timestamp;
+            LOG(INFO) << "[TimeSync] First kin_imu timestamp: " << std::fixed << std::setprecision(6) << first_kin_imu_time_;
+            
+            // Calculate time offset if we have both first timestamps
+            if (first_lidar_time_ > 0.0 && !time_offset_calculated_) {
+                lidar_time_offset_ = first_kin_imu_time_ - first_lidar_time_;
+                time_offset_calculated_ = true;
+                LOG(INFO) << "[TimeSync] Calculated lidar_time_offset: " << lidar_time_offset_
+                          << "s (kin_imu - lidar)";
+            }
+        }
+        
         if (timestamp < last_timestamp_kin_imu_) {
             RCLCPP_WARN(this->get_logger(), "Time inconsistency detected in Kin. Imu data stream");
             kin_imu_cache_.clear();
@@ -269,6 +306,7 @@ void RosInterface::kinematicImuCallBack(const go2_driver::msg::LegSensor::Shared
 
 bool RosInterface::syncPackage() {
     static bool lidar_push_ = false;
+    static bool caches_cleared_after_sync_ = false;
     std::lock_guard<std::mutex> lk(mutex_);
 
     if (options::kImuUse) {
@@ -293,15 +331,37 @@ bool RosInterface::syncPackage() {
     }
 
     if (options::kKinAndImuUse) {
+        // Wait until time offset is calculated
+        if (!time_offset_calculated_) {
+            return false;
+        }
+        
+        // Clear caches once after time offset is calculated (remove data with incorrect timestamps)
+        if (!caches_cleared_after_sync_) {
+            LOG(INFO) << "[TimeSync] Clearing caches after time offset calculation. "
+                      << "lidar_cache=" << lidar_cache_.size()
+                      << ", kin_imu_cache=" << kin_imu_cache_.size();
+            lidar_cache_.clear();
+            kin_imu_cache_.clear();
+            lidar_push_ = false;
+            caches_cleared_after_sync_ = true;
+            return false;
+        }
+        
         if (lidar_cache_.empty() || kin_imu_cache_.empty()) return false;
+        
         if (!lidar_push_) {
             measure_.lidar_scan_ = lidar_cache_.front();
             lidar_end_time_ = measure_.lidar_scan_.lidar_end_time_;
             lidar_push_ = true;
         }
-        if (last_timestamp_kin_imu_ < lidar_end_time_) return false;
+        
+        if (last_timestamp_kin_imu_ < lidar_end_time_) {
+            return false;
+        }
 
         measure_.kin_imus_.clear();
+        
         while (!kin_imu_cache_.empty()) {
             if (kin_imu_cache_.front().time_stamp_ > lidar_end_time_) break;
             measure_.kin_imus_.push_back(kin_imu_cache_.front());
@@ -309,6 +369,12 @@ bool RosInterface::syncPackage() {
         }
         lidar_cache_.pop_front();
         lidar_push_ = false;
+        
+        static int sync_count = 0;
+        if (sync_count < 5) {
+            LOG(INFO) << "[SyncPackage] Synced! kin_imus_count=" << measure_.kin_imus_.size();
+            sync_count++;
+        }
         return true;
     }
     return false;

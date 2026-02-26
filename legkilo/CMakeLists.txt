@@ -82,6 +82,7 @@ set(SOURCES
     src/preprocess/lidar/ouster.cc
     src/preprocess/lidar/robosense.cc
     src/preprocess/lidar/velodyne.cc
+    src/preprocess/lidar/utlidar.cc
     
     # Core algorithms
     src/core/slam/KILO.cc

@@ -93,6 +93,28 @@ POINT_CLOUD_REGISTER_POINT_STRUCT (
 // clang-format on
 
 
+// clang-format off
+/**
+ * @brief Unilidar Point Type
+ */
+namespace utlidar_ros {
+struct Point
+{
+  PCL_ADD_POINT4D
+  PCL_ADD_INTENSITY
+  std::uint16_t ring;
+  float time;
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+} EIGEN_ALIGN16;
+}
+POINT_CLOUD_REGISTER_POINT_STRUCT(utlidar_ros::Point,
+  (float, x, x)(float, y, y)(float, z, z)
+  (float, intensity, intensity)
+  (std::uint16_t, ring, ring)
+  (float, time, time)
+)
+// clang-format on
+
 namespace legkilo {
 
 class LidarProcessing {
@@ -128,7 +150,7 @@ class LidarProcessing {
                             common::LidarScan& lidar_scan,
                             int i_sub_cloud, int num_sub_cloud, double & start_time, double & end_time
                         );
-    // void utlidar_handler(const sensor_msgs::msg::PointCloud2::UniquePtr &msg, common::LidarScan& lidar_scan);
+    void utlidar_handler(const sensor_msgs::msg::PointCloud2::SharedPtr &msg, common::LidarScan& lidar_scan);
 
     CloudPtr cloud_pcl_;
     Config config_;

@@ -131,7 +131,7 @@ bool KILO::predictUpdatePoint(double current_time, size_t idx_i, size_t idx_j, c
         cloud_down_world.points[idx_i + i].x = cur_pt_var.point_w(0);
         cloud_down_world.points[idx_i + i].y = cur_pt_var.point_w(1);
         cloud_down_world.points[idx_i + i].z = cur_pt_var.point_w(2);
-        cloud_down_world.points[idx_i + i].intensity = 0;
+        cloud_down_world.points[idx_i + i].intensity = cur_pt.intensity;  // 保留原始强度值
         calcBodyCov(cur_pt_var.point_b, map_manager_->config_setting_.dept_err_,
                     map_manager_->config_setting_.beam_err_, cur_pt_var.body_var);
         cur_pt_var.point_crossmat << SKEW_SYM_MATRIX(cur_pt_var.point_i);
@@ -221,7 +221,7 @@ bool KILO::predictUpdatePoint(double current_time, size_t idx_i, size_t idx_j, c
             cloud_down_world.points[idx_i + i].x = pv_list[i].point_w(0);
             cloud_down_world.points[idx_i + i].y = pv_list[i].point_w(1);
             cloud_down_world.points[idx_i + i].z = pv_list[i].point_w(2);
-            cloud_down_world.points[idx_i + i].intensity = 255;
+            // intensity 已在第一次赋值时设置，此处无需重复
 
             Mat3D rot_extR = eskf_->getRot() * ext_rot_;
             Mat3D rot_crossmat = eskf_->getRot() * pv_list[i].point_crossmat;

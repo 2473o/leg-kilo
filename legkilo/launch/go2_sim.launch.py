@@ -10,11 +10,13 @@ from launch_ros.actions import Node
 def generate_launch_description():
     # Get the package directory
     pkg_share = get_package_share_directory('legkilo')
+
+    lidar_ = "robosense" # utlidar robosense
     
     # Declare launch arguments
     config_file_arg = DeclareLaunchArgument(
         'config_file',
-        default_value=os.path.join(pkg_share, 'config', 'go2_real.yaml'),
+        default_value=os.path.join(pkg_share, 'config', f'go2_real_{lidar_}.yaml'),
         description='Path to the YAML config file'
     )
     

@@ -114,6 +114,12 @@ class RosInterface : public rclcpp::Node {
     double last_timestamp_imu_;
     double last_timestamp_kin_imu_;
     double lidar_end_time_;
+    
+    // Dynamic time synchronization
+    double lidar_time_offset_ = 0.0;
+    bool time_offset_calculated_ = false;
+    double first_lidar_time_ = 0.0;
+    double first_kin_imu_time_ = 0.0;
 
     double init_time_ = 0.1;
     bool init_flag_ = true;

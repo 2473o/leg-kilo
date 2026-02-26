@@ -1,10 +1,10 @@
 root_dir: /home/alex/others/unitree_ws/slam/Leg-KILO
 
 # Topics
-lidar_topic: /rslidar_points
+lidar_topic: /utlidar/cloud
 imu_topic: /imu
 kinematic_topic: /leg_sensor
-kinematic_type: go2_driver::msg::LegSensor
+kinematic_type: go2_driver::msg::LegSensor # 占位
 
 
 # KI Options
@@ -18,12 +18,12 @@ init_time: 0.05
 gravity: 9.81                
 
 # Extrinsic (Transformation  from IMU coordinate  to Lidar coordinate)
-extrinsic_T: [0.005, 0.00056, 0.299]
-extrinsic_R: [1, 0, 0, 0, 1, 0, 0, 0, 1]
+extrinsic_T: [0.29, 0.0, -0.05]
+extrinsic_R: [-0.96, 0.0, 0.26, 0.0, 1.0, 0.0, -0.26, 0.0, -0.96]
 
 # Lidar Common
-lidar_type: 4   # Velodyne: 1 Ouster: 2 Hesai: 3 Robosense: 4
-time_scale: 1e-9 # point sampling time scale relative to [sec]
+lidar_type: 5   # Velodyne: 1 Ouster: 2 Hesai: 3 Robosense: 4, UTLidar: 5
+time_scale: 1.0 # point sampling time scale relative to [sec] - UTLidar uses seconds directly
 blind: 1.5
 filter_num: 3
 point_stamp_correct: true  # Set true for legkilo dataset

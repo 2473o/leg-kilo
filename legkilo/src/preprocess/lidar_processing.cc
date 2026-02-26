@@ -24,6 +24,7 @@ void LidarProcessing::processing(const sensor_msgs::msg::PointCloud2::SharedPtr&
             robosense_handler(msg, lidar_scan, 0, 1, start_time, end_time);
             }
         break;
+        case common::LidarType::UTLidar: utlidar_handler(msg, lidar_scan); break;
 
         default: LOG(ERROR) << " Lidar Type is Not Currently Available"; break;
     }
