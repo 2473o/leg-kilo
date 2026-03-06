@@ -99,6 +99,7 @@ target_include_directories(${PROJECT_NAME}
   PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../small_gicp/include>
     $<INSTALL_INTERFACE:include>
     ${EIGEN3_INCLUDE_DIRS}
     ${PCL_INCLUDE_DIRS}
@@ -110,6 +111,7 @@ target_link_libraries(${PROJECT_NAME}
     ${PCL_COMMON_LIBRARIES}
     ${PCL_IO_LIBRARIES}
     ${PCL_FILTERS_LIBRARIES}
+    small_gicp::small_gicp
     yaml-cpp
     glog
     gflags

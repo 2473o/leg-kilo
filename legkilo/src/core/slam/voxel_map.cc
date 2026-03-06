@@ -20,6 +20,8 @@ which is included as part of this source code package.
 
 namespace legkilo {
 
+int voxel_plane_id = 0;
+
 void calcBodyCov(Eigen::Vector3d &pb, const float range_inc, const float degree_inc, Eigen::Matrix3d &cov) {
     if (pb[2] == 0) pb[2] = 0.0001;
     float range = sqrt(pb[0] * pb[0] + pb[1] * pb[1] + pb[2] * pb[2]);
@@ -66,15 +68,12 @@ void VoxelOctoTree::init_plane(const std::vector<pointWithVar> &points, VoxelPla
     //   std::cout << static_cast<int>(evalsMin) << " " << static_cast<int>(evalsMax) << std::endl;
     //   throw std::runtime_error("wrong evals mid index");
     // }
-    Eigen::Vector3d evecMin = evecs.real().col(evalsMin);
-    Eigen::Vector3d evecMid = evecs.real().col(evalsMid);
-    Eigen::Vector3d evecMax = evecs.real().col(evalsMax);
     Eigen::Matrix3d J_Q;
     J_Q << 1.0 / plane->points_size_, 0, 0, 0, 1.0 / plane->points_size_, 0, 0, 0, 1.0 / plane->points_size_;
     // && evalsReal(evalsMid) > 0.05
     //&& evalsReal(evalsMid) > 0.01
     if (evalsReal(evalsMin) < planer_threshold_) {
-        for (int i = 0; i < points.size(); i++) {
+        for (size_t i = 0; i < points.size(); i++) {
             Eigen::Matrix<double, 6, 3> J;
             Eigen::Matrix3d F;
             for (int m = 0; m < 3; m++) {
@@ -118,12 +117,12 @@ void VoxelOctoTree::init_plane(const std::vector<pointWithVar> &points, VoxelPla
 }
 
 void VoxelOctoTree::init_octo_tree() {
-    if (temp_points_.size() > points_size_threshold_) {
+    if (temp_points_.size() > static_cast<size_t>(points_size_threshold_)) {
         init_plane(temp_points_, plane_ptr_);
         if (plane_ptr_->is_plane_ == true) {
             octo_state_ = 0;
             // new added
-            if (temp_points_.size() > max_points_num_) {
+            if (temp_points_.size() > static_cast<size_t>(max_points_num_)) {
                 update_enable_ = false;
                 std::vector<pointWithVar>().swap(temp_points_);
                 new_points_ = 0;
@@ -160,14 +159,14 @@ void VoxelOctoTree::cut_octo_tree() {
         leaves_[leafnum]->temp_points_.push_back(temp_points_[i]);
         leaves_[leafnum]->new_points_++;
     }
-    for (uint i = 0; i < 8; i++) {
+    for (size_t i = 0; i < 8; i++) {
         if (leaves_[i] != nullptr) {
-            if (leaves_[i]->temp_points_.size() > leaves_[i]->points_size_threshold_) {
+            if (leaves_[i]->temp_points_.size() > static_cast<size_t>(leaves_[i]->points_size_threshold_)) {
                 init_plane(leaves_[i]->temp_points_, leaves_[i]->plane_ptr_);
                 if (leaves_[i]->plane_ptr_->is_plane_) {
                     leaves_[i]->octo_state_ = 0;
                     // new added
-                    if (leaves_[i]->temp_points_.size() > leaves_[i]->max_points_num_) {
+                    if (leaves_[i]->temp_points_.size() > static_cast<size_t>(leaves_[i]->max_points_num_)) {
                         leaves_[i]->update_enable_ = false;
                         std::vector<pointWithVar>().swap(leaves_[i]->temp_points_);
                         new_points_ = 0;
@@ -187,7 +186,7 @@ void VoxelOctoTree::UpdateOctoTree(const pointWithVar &pv) {
     if (!init_octo_) {
         new_points_++;
         temp_points_.push_back(pv);
-        if (temp_points_.size() > points_size_threshold_) { init_octo_tree(); }
+        if (temp_points_.size() > static_cast<size_t>(points_size_threshold_)) { init_octo_tree(); }
     } else {
         if (plane_ptr_->is_plane_) {
             if (update_enable_) {
@@ -197,7 +196,7 @@ void VoxelOctoTree::UpdateOctoTree(const pointWithVar &pv) {
                     init_plane(temp_points_, plane_ptr_);
                     new_points_ = 0;
                 }
-                if (temp_points_.size() >= max_points_num_) {
+                if (temp_points_.size() >= static_cast<size_t>(max_points_num_)) {
                     update_enable_ = false;
                     std::vector<pointWithVar>().swap(temp_points_);
                     new_points_ = 0;
@@ -230,7 +229,7 @@ void VoxelOctoTree::UpdateOctoTree(const pointWithVar &pv) {
                         init_plane(temp_points_, plane_ptr_);
                         new_points_ = 0;
                     }
-                    if (temp_points_.size() > max_points_num_) {
+                    if (temp_points_.size() > static_cast<size_t>(max_points_num_)) {
                         update_enable_ = false;
                         std::vector<pointWithVar>().swap(temp_points_);
                         new_points_ = 0;
@@ -310,8 +309,8 @@ void VoxelMapManager::BuildVoxelMap(const Eigen::Matrix3d rot, const Eigen::Matr
         input_points.push_back(pv);
     }
 
-    uint plsize = input_points.size();
-    for (uint i = 0; i < plsize; i++) {
+    size_t plsize = input_points.size();
+    for (size_t i = 0; i < plsize; i++) {
         const pointWithVar p_v = input_points[i];
         Eigen::Vector3i position = legkilo::voxelKeyFloor(p_v.point_w, voxel_size);
         auto iter = voxel_map_.find(position);
@@ -340,8 +339,8 @@ void VoxelMapManager::UpdateVoxelMap(const std::vector<pointWithVar> &input_poin
     int max_layer = config_setting_.max_layer_;
     int max_points_num = config_setting_.max_points_num_;
     std::vector<int> layer_init_num = config_setting_.layer_init_num_;
-    uint plsize = input_points.size();
-    for (uint i = 0; i < plsize; i++) {
+    size_t plsize = input_points.size();
+    for (size_t i = 0; i < plsize; i++) {
         const pointWithVar p_v = input_points[i];
         Eigen::Vector3i position = legkilo::voxelKeyFloor(p_v.point_w, voxel_size);
         auto iter = voxel_map_.find(position);
@@ -371,7 +370,6 @@ void VoxelMapManager::build_single_residual(pointWithVar &pv, const VoxelOctoTre
     Eigen::Vector3d p_w = pv.point_w;
     if (current_octo->plane_ptr_->is_plane_) {
         VoxelPlane &plane = *current_octo->plane_ptr_;
-        Eigen::Vector3d p_world_to_center = p_w - plane.center_;
         float dis_to_plane =
             fabs(plane.normal_(0) * p_w(0) + plane.normal_(1) * p_w(1) + plane.normal_(2) * p_w(2) + plane.d_);
         float dis_to_center = (plane.center_(0) - p_w(0)) * (plane.center_(0) - p_w(0)) +

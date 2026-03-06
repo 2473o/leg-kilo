@@ -1,9 +1,10 @@
-﻿#ifndef LEG_KILO_CORE_SLAM_KILO_H_
+#ifndef LEG_KILO_CORE_SLAM_KILO_H_
 #define LEG_KILO_CORE_SLAM_KILO_H_
 
 #include <deque>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include <pcl/filters/voxel_grid.h>
 // #include <sensor_msgs/Imu.h>
@@ -62,6 +63,19 @@ class KILO {
     Mat3D ext_rot_ = Mat3D::Identity();
     Vec3D ext_t_ = Vec3D::Zero();
     pcl::VoxelGrid<PointType> voxel_grid_;
+
+    bool use_small_gicp_ = false;
+    bool small_gicp_initialized_ = false;
+    int small_gicp_num_threads_ = 4;
+    int small_gicp_num_neighbors_ = 10;
+    int small_gicp_max_iterations_ = 20;
+    double small_gicp_downsampling_resolution_ = 0.25;
+    double small_gicp_max_correspondence_distance_ = 1.0;
+    double small_gicp_voxel_resolution_ = 1.0;
+    int small_gicp_type_ = 2;
+    Eigen::Isometry3d small_gicp_pose_ = Eigen::Isometry3d::Identity();
+    Eigen::Isometry3d small_gicp_last_delta_ = Eigen::Isometry3d::Identity();
+    std::vector<Eigen::Vector3d> small_gicp_prev_points_;
 };
 
 }  // namespace legkilo

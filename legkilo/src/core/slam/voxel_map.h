@@ -36,24 +36,24 @@ which is included as part of this source code package.
 
 namespace legkilo {
 
-static int voxel_plane_id = 0;
+extern int voxel_plane_id;
 
 typedef struct VoxelMapConfig {
-    double max_voxel_size_;
-    int max_layer_;
-    int max_iterations_;
+    double max_voxel_size_ = 0.0;
+    int max_layer_ = 0;
+    int max_iterations_ = 0;
     std::vector<int> layer_init_num_;
-    int max_points_num_;
-    double planner_threshold_;
-    double beam_err_;
-    double dept_err_;
-    double sigma_num_;
-    bool is_pub_plane_map_;
+    int max_points_num_ = 0;
+    double planner_threshold_ = 0.0;
+    double beam_err_ = 0.0;
+    double dept_err_ = 0.0;
+    double sigma_num_ = 0.0;
+    bool is_pub_plane_map_ = false;
 
     // config of local map sliding
-    double sliding_thresh;
-    bool map_sliding_en;
-    int half_map_size;
+    double sliding_thresh = 0.0;
+    bool map_sliding_en = false;
+    int half_map_size = 0;
 } VoxelMapConfig;
 
 typedef struct pointWithVar {
@@ -147,17 +147,18 @@ class VoxelOctoTree {
     bool update_enable_;
 
     VoxelOctoTree(int max_layer, int layer, int points_size_threshold, int max_points_num, float planer_threshold)
-        : max_layer_(max_layer),
-          layer_(layer),
+        : layer_(layer),
+          octo_state_(0),
+          quater_length_(0.0f),
+          planer_threshold_(planer_threshold),
           points_size_threshold_(points_size_threshold),
+          update_size_threshold_(5),
           max_points_num_(max_points_num),
-          planer_threshold_(planer_threshold) {
+          max_layer_(max_layer),
+          new_points_(0),
+          init_octo_(false),
+          update_enable_(true) {
         temp_points_.clear();
-        octo_state_ = 0;
-        new_points_ = 0;
-        update_size_threshold_ = 5;
-        init_octo_ = false;
-        update_enable_ = true;
         for (int i = 0; i < 8; i++) { leaves_[i] = nullptr; }
         plane_ptr_ = new VoxelPlane;
     }

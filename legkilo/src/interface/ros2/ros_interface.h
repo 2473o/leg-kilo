@@ -120,6 +120,7 @@ class RosInterface : public rclcpp::Node {
     bool time_offset_calculated_ = false;
     double first_lidar_time_ = 0.0;
     double first_kin_imu_time_ = 0.0;
+    bool dynamic_time_adjust_enable_ = false;
 
     double init_time_ = 0.1;
     bool init_flag_ = true;
