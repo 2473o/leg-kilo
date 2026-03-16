@@ -50,7 +50,6 @@ find_package(Eigen3 REQUIRED)
 find_package(PCL REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(Glog REQUIRED)
-find_package(small_gicp REQUIRED)
 find_package(go2_driver REQUIRED)
 # find_package(GTSAM REQUIRED)
 
@@ -69,7 +68,6 @@ set(dependencies
   tf2_ros
   tf2_geometry_msgs
   go2_driver
-  small_gicp
 )
 
 set(SOURCES
@@ -99,7 +97,6 @@ target_include_directories(${PROJECT_NAME}
   PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../small_gicp/include>
     $<INSTALL_INTERFACE:include>
     ${EIGEN3_INCLUDE_DIRS}
     ${PCL_INCLUDE_DIRS}
@@ -111,7 +108,6 @@ target_link_libraries(${PROJECT_NAME}
     ${PCL_COMMON_LIBRARIES}
     ${PCL_IO_LIBRARIES}
     ${PCL_FILTERS_LIBRARIES}
-    small_gicp::small_gicp
     yaml-cpp
     glog
     gflags

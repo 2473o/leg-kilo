@@ -8,7 +8,7 @@ kinematic_type: go2_driver::msg::LegSensor
 
 
 # KI Options
-only_imu_use: false # True: use IMU from <sensor_msgs::Imu>, without kinematics
+only_imu_use: true # True: use IMU from <sensor_msgs::Imu>, without kinematics
                                           # False: use IMU and Kin. from <unitree_legged_msgs/HighState>
 redundancy: true # set true for legkilo dataset 
                                      # (imu/kin publish freq is 500 hz but update freq is only 50 hz )
@@ -25,7 +25,7 @@ extrinsic_R: [1, 0, 0, 0, 1, 0, 0, 0, 1]
 # Lidar Common
 lidar_type: 4   # Velodyne: 1 Ouster: 2 Hesai: 3 Robosense: 4
 time_scale: 1e-9 # point sampling time scale relative to [sec]
-blind: 1.5
+blind: 4.0
 filter_num: 3
 point_stamp_correct: true  # Set true for legkilo dataset
                                                          # (lidar timestamp is the end time of scan)
@@ -51,9 +51,10 @@ leg_offset_y: 0.0465
 leg_calf_length: 0.213
 leg_thigh_length: 0.213
 leg_thigh_offset: 0.0465
-contact_force_threshold_up: 40
+# contact_force_threshold_up: 40
+contact_force_threshold_up: 38.79
 contact_force_threshold_down: 60
-pub_joint_tf_enable: true
+pub_joint_tf_enable: false
 
 satu_acc: 35
 satu_gyr: 30
@@ -76,7 +77,7 @@ contact_meas_noise: 0.001
 lidar_point_meas_ratio: 10
 
 # vis
-save_traj_enable: false
-save_pcd_enable: false
+save_traj_enable: true
+save_pcd_enable: true
 pcd_frames_per_file: 100
 pcd_voxel_leaf_size: 0.1

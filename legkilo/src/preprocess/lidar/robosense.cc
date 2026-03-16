@@ -1,4 +1,6 @@
 #include "preprocess/lidar_processing.h"
+#include <array>
+#include <cmath>
 #include <pcl_conversions/pcl_conversions.h>
 #include <rclcpp/rclcpp.hpp>
 
@@ -14,6 +16,23 @@ static bool hasField(const sensor_msgs::msg::PointCloud2& msg, const std::string
         }
     }
     return false;
+}
+
+static double normalizePointTimestamp(double ts, double msg_time) {
+    const std::array<double, 4> candidates = {ts, ts * 1e-3, ts * 1e-6, ts * 1e-9};
+    double best = candidates[0];
+    double best_diff = std::abs(candidates[0] - msg_time);
+    for (size_t i = 1; i < candidates.size(); ++i) {
+        const double diff = std::abs(candidates[i] - msg_time);
+        if (diff < best_diff) {
+            best_diff = diff;
+            best = candidates[i];
+        }
+    }
+    if (best_diff < 3600.0) {
+        return best;
+    }
+    return ts;
 }
 
 /**
@@ -53,14 +72,8 @@ void LidarProcessing::robosense_handler(const sensor_msgs::msg::PointCloud2::Sha
         
         if (start_idx >= cloud_size) return;
         
-        start_time = cloud_robosense.points[start_idx].timestamp;
-        end_time = cloud_robosense.points[end_idx - 1].timestamp;
-        
-        // 判断时间戳格式并转换
-        if (start_time > 1e9) {
-            start_time *= 1e-9;
-            end_time *= 1e-9;
-        }
+        start_time = normalizePointTimestamp(cloud_robosense.points[start_idx].timestamp, msg_time);
+        end_time = normalizePointTimestamp(cloud_robosense.points[end_idx - 1].timestamp, msg_time);
         
         lidar_scan.lidar_begin_time_ = start_time;
         lidar_scan.lidar_end_time_ = end_time;
@@ -85,10 +98,7 @@ void LidarProcessing::robosense_handler(const sensor_msgs::msg::PointCloud2::Sha
             added_point.intensity = pt.intensity;
 
             // 使用点的时间戳计算相对时间
-            double pt_time = pt.timestamp;
-            if (pt_time > 1e9) {
-                pt_time *= 1e-9;
-            }
+            double pt_time = normalizePointTimestamp(pt.timestamp, msg_time);
             added_point.curvature = static_cast<float>((pt_time - start_time) * config_.time_scale_);
 
             lidar_scan.cloud_->points.push_back(added_point);

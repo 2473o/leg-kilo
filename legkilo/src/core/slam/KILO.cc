@@ -7,7 +7,6 @@
 #include <utility>
 #include <rclcpp/rclcpp.hpp>
 #include "common/math_utils.hpp"
-#include <small_gicp/registration/registration_helper.hpp>
 
 
 #include "common/glog_utils.hpp"
@@ -39,6 +38,8 @@ void transformCloud(const PointCloudType& input, const Eigen::Isometry3d& transf
     output.points.resize(input.points.size());
     Eigen::Matrix3d rot = transform.rotation();
     Eigen::Vector3d trans = transform.translation();
+
+    #pragma omp parallel for schedule(static)
     for (size_t i = 0; i < input.points.size(); ++i) {
         const auto& pt_in = input.points[i];
         auto& pt_out = output.points[i];
@@ -120,35 +121,10 @@ void KILO::initializeFromYaml(const std::string& config_file) {
     // Downsample
     float voxel_grid_resolution = yaml_helper.get<float>("voxel_grid_resolution");
     voxel_grid_.setLeafSize(voxel_grid_resolution, voxel_grid_resolution, voxel_grid_resolution);
-
-    use_small_gicp_ = yaml_helper.get<bool>("use_small_gicp", false);
-    int hw_threads = static_cast<int>(std::max(1u, std::thread::hardware_concurrency()));
-    small_gicp_num_threads_ = yaml_helper.get<int>("small_gicp_num_threads", hw_threads);
-    if (small_gicp_num_threads_ <= 0) {
-        small_gicp_num_threads_ = hw_threads;
-    }
-    small_gicp_downsampling_resolution_ =
-        yaml_helper.get<double>("small_gicp_downsampling_resolution", static_cast<double>(voxel_grid_resolution));
-    small_gicp_max_correspondence_distance_ =
-        yaml_helper.get<double>("small_gicp_max_correspondence_distance", 1.0);
-    small_gicp_num_neighbors_ = yaml_helper.get<int>("small_gicp_num_neighbors", 10);
-    small_gicp_max_iterations_ = yaml_helper.get<int>("small_gicp_max_iterations", 20);
-    small_gicp_voxel_resolution_ =
-        yaml_helper.get<double>("small_gicp_voxel_resolution", static_cast<double>(voxel_grid_resolution));
-    std::string small_gicp_type_str = yaml_helper.get<std::string>("small_gicp_type", "GICP");
-    if (small_gicp_type_str == "ICP") {
-        small_gicp_type_ = 0;
-    } else if (small_gicp_type_str == "PLANE_ICP") {
-        small_gicp_type_ = 1;
-    } else if (small_gicp_type_str == "VGICP") {
-        small_gicp_type_ = 3;
-    } else {
-        small_gicp_type_ = 2;
-    }
 }
 
-Vec3D KILO::getPos() const { return use_small_gicp_ ? small_gicp_pose_.translation() : eskf_->getPos(); }
-Mat3D KILO::getRot() const { return use_small_gicp_ ? small_gicp_pose_.rotation() : eskf_->getRot(); }
+Vec3D KILO::getPos() const { return eskf_->getPos(); }
+Mat3D KILO::getRot() const { return eskf_->getRot(); }
 
 void KILO::cloudLidarToWorld(const CloudPtr& cloud_lidar, CloudPtr& cloud_world) {
     cloud_world->clear();
@@ -386,71 +362,6 @@ bool KILO::process(common::MeasGroup measure, CloudPtr& cloud_down_body_out, Clo
     auto& kin_imus = measure.kin_imus_;
     double begin_time = measure.lidar_scan_.lidar_begin_time_;
     double end_time = measure.lidar_scan_.lidar_end_time_;
-
-    if (use_small_gicp_) {
-        if (cloud_raw->points.empty()) {
-            LOG(WARNING) << "Data packet is not ready";
-            return false;
-        }
-
-        Timer::measure("Downsampling", [&, this]() {
-            cloud_down_body_out.reset(new PointCloudType());
-            voxel_grid_.setInputCloud(cloud_raw);
-            voxel_grid_.filter(*cloud_down_body_out);
-        });
-
-        cloud_down_world_out.reset(new PointCloudType());
-        cloud_down_world_out->points.resize(cloud_down_body_out->points.size());
-
-        std::vector<Eigen::Vector3d> current_points = toEigenPoints(*cloud_down_body_out);
-        if (current_points.empty()) {
-            LOG(WARNING) << "Data packet is not ready";
-            return false;
-        }
-        if (!small_gicp_initialized_) {
-            small_gicp_pose_ = Eigen::Isometry3d::Identity();
-            small_gicp_last_delta_ = Eigen::Isometry3d::Identity();
-            small_gicp_prev_points_ = current_points;
-            transformCloud(*cloud_down_body_out, small_gicp_pose_, *cloud_down_world_out);
-            success_pts_size_out = cloud_down_body_out->points.size();
-            small_gicp_initialized_ = true;
-            last_state_predict_time_ = end_time;
-            last_state_update_time_ = end_time;
-            return true;
-        }
-
-        small_gicp::RegistrationSetting setting;
-        setting.num_threads = small_gicp_num_threads_;
-        setting.downsampling_resolution = small_gicp_downsampling_resolution_;
-        setting.max_correspondence_distance = small_gicp_max_correspondence_distance_;
-        setting.max_iterations = small_gicp_max_iterations_;
-        setting.voxel_resolution = small_gicp_voxel_resolution_;
-        setting.type = static_cast<small_gicp::RegistrationSetting::RegistrationType>(small_gicp_type_);
-
-        auto [target_points, target_tree] = small_gicp::preprocess_points(
-            small_gicp_prev_points_, small_gicp_downsampling_resolution_, small_gicp_num_neighbors_,
-            small_gicp_num_threads_);
-        auto [source_points, source_tree] = small_gicp::preprocess_points(
-            current_points, small_gicp_downsampling_resolution_, small_gicp_num_neighbors_, small_gicp_num_threads_);
-        (void)source_tree;
-
-        small_gicp::RegistrationResult result;
-        if (setting.type == small_gicp::RegistrationSetting::VGICP) {
-            auto target_voxelmap = small_gicp::create_gaussian_voxelmap(*target_points, setting.voxel_resolution);
-            result = small_gicp::align(*target_voxelmap, *source_points, small_gicp_last_delta_, setting);
-        } else {
-            result = small_gicp::align(*target_points, *source_points, *target_tree, small_gicp_last_delta_, setting);
-        }
-
-        small_gicp_last_delta_ = result.T_target_source;
-        small_gicp_pose_ = small_gicp_pose_ * result.T_target_source;
-        transformCloud(*cloud_down_body_out, small_gicp_pose_, *cloud_down_world_out);
-        success_pts_size_out = result.num_inliers;
-        small_gicp_prev_points_ = std::move(current_points);
-        last_state_predict_time_ = end_time;
-        last_state_update_time_ = end_time;
-        return true;
-    }
 
     if (cloud_raw->points.empty() || (imu_mode_only_ && imus.empty()) || (!imu_mode_only_ && kin_imus.empty())) {
         LOG(WARNING) << "Data packet is not ready";
