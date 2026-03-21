@@ -1,4 +1,5 @@
-.vscode
+.vscode/
+.trae/
 AGENTS.md
 
 legkilo/result/traj/*

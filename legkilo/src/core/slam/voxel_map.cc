@@ -55,48 +55,54 @@ void VoxelOctoTree::init_plane(const std::vector<pointWithVar> &points, VoxelPla
     }
     plane->center_ = plane->center_ / plane->points_size_;
     plane->covariance_ = plane->covariance_ / plane->points_size_ - plane->center_ * plane->center_.transpose();
-    Eigen::EigenSolver<Eigen::Matrix3d> es(plane->covariance_);
-    Eigen::Matrix3cd evecs = es.eigenvectors();
-    Eigen::Vector3cd evals = es.eigenvalues();
-    Eigen::Vector3d evalsReal;
-    evalsReal = evals.real();
-    Eigen::Matrix3f::Index evalsMin, evalsMax;
-    evalsReal.rowwise().sum().minCoeff(&evalsMin);
-    evalsReal.rowwise().sum().maxCoeff(&evalsMax);
-    int evalsMid = 3 - evalsMin - evalsMax;
-    // if(evalsMid >= 3){
-    //   std::cout << static_cast<int>(evalsMin) << " " << static_cast<int>(evalsMax) << std::endl;
-    //   throw std::runtime_error("wrong evals mid index");
-    // }
+    plane->covariance_ = 0.5 * (plane->covariance_ + plane->covariance_.transpose());
+
+    Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> es(plane->covariance_);
+    if (es.info() != Eigen::Success) {
+        plane->is_update_ = true;
+        plane->is_plane_ = false;
+        return;
+    }
+
+    Eigen::Matrix3d evecs = es.eigenvectors();
+    Eigen::Vector3d evalsReal = es.eigenvalues();
+
+    const int evalsMin = 0;
+    const int evalsMid = 1;
+    const int evalsMax = 2;
     Eigen::Matrix3d J_Q;
     J_Q << 1.0 / plane->points_size_, 0, 0, 0, 1.0 / plane->points_size_, 0, 0, 0, 1.0 / plane->points_size_;
     // && evalsReal(evalsMid) > 0.05
     //&& evalsReal(evalsMid) > 0.01
     if (evalsReal(evalsMin) < planer_threshold_) {
-        for (size_t i = 0; i < points.size(); i++) {
+        for (int i = 0; i < points.size(); i++) {
             Eigen::Matrix<double, 6, 3> J;
             Eigen::Matrix3d F;
             for (int m = 0; m < 3; m++) {
                 if (m != (int)evalsMin) {
-                    Eigen::Matrix<double, 1, 3> F_m = (points[i].point_w - plane->center_).transpose() /
-                                                      ((plane->points_size_) * (evalsReal[evalsMin] - evalsReal[m])) *
-                                                      (evecs.real().col(m) * evecs.real().col(evalsMin).transpose() +
-                                                       evecs.real().col(evalsMin) * evecs.real().col(m).transpose());
-                    F.row(m) = F_m;
+                    double denom = (plane->points_size_) * (evalsReal[evalsMin] - evalsReal[m]);
+                    if (std::abs(denom) < 1e-12) {
+                        F.row(m).setZero();
+                    } else {
+                        Eigen::Matrix<double, 1, 3> F_m = (points[i].point_w - plane->center_).transpose() / denom *
+                                                          (evecs.col(m) * evecs.col(evalsMin).transpose() +
+                                                           evecs.col(evalsMin) * evecs.col(m).transpose());
+                        F.row(m) = F_m;
+                    }
                 } else {
                     Eigen::Matrix<double, 1, 3> F_m;
                     F_m << 0, 0, 0;
                     F.row(m) = F_m;
                 }
             }
-            J.block<3, 3>(0, 0) = evecs.real() * F;
+            J.block<3, 3>(0, 0) = evecs * F;
             J.block<3, 3>(3, 0) = J_Q;
             plane->plane_var_ += J * points[i].var * J.transpose();
         }
 
-        plane->normal_ << evecs.real()(0, evalsMin), evecs.real()(1, evalsMin), evecs.real()(2, evalsMin);
-        plane->y_normal_ << evecs.real()(0, evalsMid), evecs.real()(1, evalsMid), evecs.real()(2, evalsMid);
-        plane->x_normal_ << evecs.real()(0, evalsMax), evecs.real()(1, evalsMax), evecs.real()(2, evalsMax);
+        plane->normal_ << evecs(0, evalsMin), evecs(1, evalsMin), evecs(2, evalsMin);
+        plane->y_normal_ << evecs(0, evalsMid), evecs(1, evalsMid), evecs(2, evalsMid);
+        plane->x_normal_ << evecs(0, evalsMax), evecs(1, evalsMax), evecs(2, evalsMax);
         plane->min_eigen_value_ = evalsReal(evalsMin);
         plane->mid_eigen_value_ = evalsReal(evalsMid);
         plane->max_eigen_value_ = evalsReal(evalsMax);
@@ -117,12 +123,12 @@ void VoxelOctoTree::init_plane(const std::vector<pointWithVar> &points, VoxelPla
 }
 
 void VoxelOctoTree::init_octo_tree() {
-    if (temp_points_.size() > static_cast<size_t>(points_size_threshold_)) {
+    if (temp_points_.size() > points_size_threshold_) {
         init_plane(temp_points_, plane_ptr_);
         if (plane_ptr_->is_plane_ == true) {
             octo_state_ = 0;
             // new added
-            if (temp_points_.size() > static_cast<size_t>(max_points_num_)) {
+            if (temp_points_.size() > max_points_num_) {
                 update_enable_ = false;
                 std::vector<pointWithVar>().swap(temp_points_);
                 new_points_ = 0;
@@ -161,12 +167,12 @@ void VoxelOctoTree::cut_octo_tree() {
     }
     for (size_t i = 0; i < 8; i++) {
         if (leaves_[i] != nullptr) {
-            if (leaves_[i]->temp_points_.size() > static_cast<size_t>(leaves_[i]->points_size_threshold_)) {
+            if (leaves_[i]->temp_points_.size() > leaves_[i]->points_size_threshold_) {
                 init_plane(leaves_[i]->temp_points_, leaves_[i]->plane_ptr_);
                 if (leaves_[i]->plane_ptr_->is_plane_) {
                     leaves_[i]->octo_state_ = 0;
                     // new added
-                    if (leaves_[i]->temp_points_.size() > static_cast<size_t>(leaves_[i]->max_points_num_)) {
+                    if (leaves_[i]->temp_points_.size() > leaves_[i]->max_points_num_) {
                         leaves_[i]->update_enable_ = false;
                         std::vector<pointWithVar>().swap(leaves_[i]->temp_points_);
                         new_points_ = 0;
@@ -186,7 +192,7 @@ void VoxelOctoTree::UpdateOctoTree(const pointWithVar &pv) {
     if (!init_octo_) {
         new_points_++;
         temp_points_.push_back(pv);
-        if (temp_points_.size() > static_cast<size_t>(points_size_threshold_)) { init_octo_tree(); }
+        if (temp_points_.size() > points_size_threshold_) { init_octo_tree(); }
     } else {
         if (plane_ptr_->is_plane_) {
             if (update_enable_) {
@@ -196,7 +202,7 @@ void VoxelOctoTree::UpdateOctoTree(const pointWithVar &pv) {
                     init_plane(temp_points_, plane_ptr_);
                     new_points_ = 0;
                 }
-                if (temp_points_.size() >= static_cast<size_t>(max_points_num_)) {
+                if (temp_points_.size() >= max_points_num_) {
                     update_enable_ = false;
                     std::vector<pointWithVar>().swap(temp_points_);
                     new_points_ = 0;
@@ -229,7 +235,7 @@ void VoxelOctoTree::UpdateOctoTree(const pointWithVar &pv) {
                         init_plane(temp_points_, plane_ptr_);
                         new_points_ = 0;
                     }
-                    if (temp_points_.size() > static_cast<size_t>(max_points_num_)) {
+                    if (temp_points_.size() > max_points_num_) {
                         update_enable_ = false;
                         std::vector<pointWithVar>().swap(temp_points_);
                         new_points_ = 0;
@@ -309,8 +315,8 @@ void VoxelMapManager::BuildVoxelMap(const Eigen::Matrix3d rot, const Eigen::Matr
         input_points.push_back(pv);
     }
 
-    size_t plsize = input_points.size();
-    for (size_t i = 0; i < plsize; i++) {
+    uint plsize = input_points.size();
+    for (uint i = 0; i < plsize; i++) {
         const pointWithVar p_v = input_points[i];
         Eigen::Vector3i position = legkilo::voxelKeyFloor(p_v.point_w, voxel_size);
         auto iter = voxel_map_.find(position);
@@ -339,8 +345,8 @@ void VoxelMapManager::UpdateVoxelMap(const std::vector<pointWithVar> &input_poin
     int max_layer = config_setting_.max_layer_;
     int max_points_num = config_setting_.max_points_num_;
     std::vector<int> layer_init_num = config_setting_.layer_init_num_;
-    size_t plsize = input_points.size();
-    for (size_t i = 0; i < plsize; i++) {
+    uint plsize = input_points.size();
+    for (uint i = 0; i < plsize; i++) {
         const pointWithVar p_v = input_points[i];
         Eigen::Vector3i position = legkilo::voxelKeyFloor(p_v.point_w, voxel_size);
         auto iter = voxel_map_.find(position);
