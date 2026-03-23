@@ -2,6 +2,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
+from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
@@ -9,12 +10,20 @@ from launch_ros.actions import Node
 def generate_launch_description():
     # Get the package directory
     pkg_share = get_package_share_directory('legkilo')
+
+    lidar_ = "utlidar" # utlidar robosense
     
     # Declare launch arguments
     config_file_arg = DeclareLaunchArgument(
         'config_file',
-        default_value=os.path.join(pkg_share, 'config', 'go2_real.yaml'),
+        default_value=os.path.join(pkg_share, 'config', f'go2_real_{lidar_}.yaml'),
         description='Path to the YAML config file'
+    )
+    
+    use_rviz_arg = DeclareLaunchArgument(
+        'use_rviz',
+        default_value='true',
+        description='Launch RViz'
     )
     
     # Paths to files
@@ -26,7 +35,7 @@ def generate_launch_description():
     #     with open(urdf_file, 'r') as f:
     #         robot_description = f.read()
     # except FileNotFoundError:
-        # robot_description = ''
+    # robot_description = ''
     
     # Legkilo node
     legkilo_node = Node(
@@ -45,6 +54,7 @@ def generate_launch_description():
     #     parameters=[{
     #         'robot_description': robot_description,
     #         'publish_frequency': 1000.0,
+    #         'use_sim_time': LaunchConfiguration('use_sim_time'),
     #     }],
     # )
     
@@ -55,10 +65,12 @@ def generate_launch_description():
         name='rviz',
         arguments=['-d', rviz_config_file],
         output='screen',
+        condition=IfCondition(LaunchConfiguration('use_rviz')),
     )
     
     return LaunchDescription([
         config_file_arg,
+        use_rviz_arg,
         legkilo_node,
         # robot_state_publisher_node,
         rviz_node,

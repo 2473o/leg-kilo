@@ -7,24 +7,21 @@ namespace legkilo {
 void LidarProcessing::utlidar_handler(const sensor_msgs::msg::PointCloud2::SharedPtr& msg,
                                        common::LidarScan& lidar_scan) {
     lidar_scan.cloud_.reset(new PointCloudType());
-    
+
     pcl::PointCloud<utlidar_ros::Point> cloud_raw;
     pcl::fromROSMsg(*msg, cloud_raw);
-    
+
     const int cloud_size = cloud_raw.points.size();
     if (cloud_size == 0) return;
-    
+
     lidar_scan.cloud_->points.reserve(cloud_size);
-    
+
     const double header_time = rclcpp::Time(msg->header.stamp).seconds();
-    // Time offset is applied in RosInterface
-    
-    // UTLidar 使用相对时间模式：time 字段是相对于扫描开始的偏移时间（秒）
-    // 找到第一个和最后一个有效点的相对时间
+
     float first_point_time = 0.0f;
     float last_point_time = 0.0f;
     bool found_first = false;
-    
+
     for (int i = 0; i < cloud_size; ++i) {
         if (std::isfinite(cloud_raw.points[i].time)) {
             if (!found_first) {
@@ -34,10 +31,10 @@ void LidarProcessing::utlidar_handler(const sensor_msgs::msg::PointCloud2::Share
             last_point_time = cloud_raw.points[i].time;
         }
     }
-    
+
     first_point_time *= config_.time_scale_;
     last_point_time *= config_.time_scale_;
-    
+
     // 计算扫描持续时间
     float scan_duration = last_point_time - first_point_time;
     if (scan_duration < 0.001f) {

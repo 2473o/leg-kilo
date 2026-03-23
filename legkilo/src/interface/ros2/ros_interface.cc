@@ -193,7 +193,7 @@ void RosInterface::lidarCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr 
     std::lock_guard<std::mutex> lock(mutex_);
     double timestamp = rclcpp::Time(msg->header.stamp).seconds();
     static double last_scan_time = timestamp;
-    
+
     if (dynamic_time_adjust_enable_) {
         if (first_lidar_time_ == 0.0) {
             first_lidar_time_ = timestamp;
@@ -257,13 +257,13 @@ void RosInterface::kinematicImuCallBack(const go2_driver::msg::LegSensor::Shared
     static go2_driver::msg::LegSensor last_highstate_msg;
 
     if (options::kRedundancy) {
-        if (msg->imu_state.accelerometer[2] == last_highstate_msg.imu_state.accelerometer[2] &&
-            msg->imu_state.gyroscope[2] == last_highstate_msg.imu_state.gyroscope[2]) {
+        if (msg->imu_accelerometer[2] == last_highstate_msg.imu_accelerometer[2] &&
+            msg->imu_gyroscope[2] == last_highstate_msg.imu_gyroscope[2]) {
             return;
         }
     }
 
-    double timestamp = rclcpp::Time(msg->header.stamp).seconds();
+    double timestamp = static_cast<double>(msg->timestamp_ns) * 1e-9;
     {
         std::lock_guard<std::mutex> lock(mutex_);
         
@@ -299,7 +299,8 @@ void RosInterface::kinematicImuCallBack(const go2_driver::msg::LegSensor::Shared
             "RL_hip_joint", "RL_thigh_joint", "RL_calf_joint", "RR_hip_joint", "RR_thigh_joint", "RR_calf_joint"};
         
         sensor_msgs::msg::JointState joint_state;
-        joint_state.header.stamp = msg->header.stamp;
+        joint_state.header.stamp = rclcpp::Time(msg->timestamp_ns);
+        
         joint_state.name = joint_names;
         for (int i = 0; i < 12; ++i) {
             joint_state.position.push_back(msg->q[i]);

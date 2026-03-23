@@ -1,14 +1,13 @@
 #include "preprocess/kinematics.h"
-#include <rclcpp/rclcpp.hpp>
 
 namespace legkilo {
 
 void Kinematics::processing(const go2_driver::msg::LegSensor& high_state, common::KinImuMeas& kin_imu_meas) {
-    kin_imu_meas.time_stamp_ = rclcpp::Time(high_state.header.stamp).seconds();
+    kin_imu_meas.time_stamp_ = static_cast<double>(high_state.timestamp_ns) * 1e-9;
 
     for (int i = 0; i < 3; ++i) {
-        kin_imu_meas.acc_[i] = high_state.imu_state.accelerometer[i];
-        kin_imu_meas.gyr_[i] = high_state.imu_state.gyroscope[i];
+        kin_imu_meas.acc_[i] = high_state.imu_accelerometer[i];
+        kin_imu_meas.gyr_[i] = high_state.imu_gyroscope[i];
     }
 
     /*  4 legs, 3 moters

@@ -1,18 +1,17 @@
 root_dir: /home/alex/others/unitree_ws/slam/Leg-KILO
 
 # Topics
-lidar_topic: /utlidar/cloud
+lidar_topic: /utlidar/cloud_decompressed
 imu_topic: /imu
 kinematic_topic: /leg_sensor
 kinematic_type: go2_driver::msg::LegSensor # 占位
 
-
 # KI Options
 only_imu_use: false # True: use IMU from <sensor_msgs::Imu>, without kinematics
                                           # False: use IMU and Kin. from <unitree_legged_msgs/HighState>
-redundancy: true # set true for legkilo dataset 
+redundancy: false # set true for legkilo dataset 
                                      # (imu/kin publish freq is 500 hz but update freq is only 50 hz )
-dynamic_time_adjust_enable: true # L1/L2的雷达时间为内部3588主控,如果时间对不上,需要对齐
+dynamic_time_adjust_enable: false # L1/L2的雷达时间为内部3588主控,如果时间对不上,需要对齐
 
 # Initialization
 init_time: 0.05
@@ -25,8 +24,8 @@ extrinsic_R: [-0.96, 0.0, 0.26, 0.0, 1.0, 0.0, -0.26, 0.0, -0.96]
 # Lidar Common
 lidar_type: 5   # Velodyne: 1 Ouster: 2 Hesai: 3 Robosense: 4, UTLidar: 5
 time_scale: 1.0 # point sampling time scale relative to [sec] - UTLidar uses seconds directly
-blind: 1.5
-filter_num: 3
+blind: 0.0
+filter_num: 1
 point_stamp_correct: true  # Set true for legkilo dataset
                                                          # (lidar timestamp is the end time of scan)
 voxel_grid_resolution: 0.5
