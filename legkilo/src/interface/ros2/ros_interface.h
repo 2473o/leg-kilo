@@ -55,10 +55,6 @@ class RosInterface : public rclcpp::Node {
     void subscribeLidar();
     void subscribeKinematicImu();
     void subscribeImu();
-    
-    void lidarLoop();
-    void imuLoop();
-    void kinematicImuLoop();
 
     // ROS 2 回调函数使用 SharedPtr
     void lidarCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr msg);
@@ -75,6 +71,9 @@ class RosInterface : public rclcpp::Node {
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr sub_lidar_raw_;
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr sub_imu_raw_;
     rclcpp::Subscription<go2_driver::msg::LegSensor>::SharedPtr sub_kinematic_raw_;
+    rclcpp::CallbackGroup::SharedPtr lidar_callback_group_;
+    rclcpp::CallbackGroup::SharedPtr imu_callback_group_;
+    rclcpp::CallbackGroup::SharedPtr kinematic_callback_group_;
 
     // ROS 2 发布者
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_pointcloud_body_;
@@ -91,11 +90,6 @@ class RosInterface : public rclcpp::Node {
     
     Eigen::Quaterniond q_eigen_;
     geometry_msgs::msg::PoseStamped pose_path_;
-
-    // 子线程
-    std::unique_ptr<std::thread> lidar_thread_;
-    std::unique_ptr<std::thread> imu_thread_;
-    std::unique_ptr<std::thread> kinematic_thread_;
 
     // 模块
     std::unique_ptr<LidarProcessing> lidar_processing_;

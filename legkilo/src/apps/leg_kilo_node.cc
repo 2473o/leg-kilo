@@ -48,12 +48,15 @@ int main(int argc, char** argv) {
 
     // ROS 2: Use init() instead of rosInit()
     ros_interface_node->init(FLAGS_config_file);
+    rclcpp::executors::SingleThreadedExecutor executor;
+    executor.add_node(ros_interface_node);
 
     LOG(INFO) << "Leg KILO Node Starts";
 
     // ROS 2: Main loop with rclcpp::Rate
     rclcpp::Rate rate(5000);
     while (rclcpp::ok() && !legkilo::options::FLAG_EXIT.load()) {
+        executor.spin_some();
         ros_interface_node->run();
         rate.sleep();
     }

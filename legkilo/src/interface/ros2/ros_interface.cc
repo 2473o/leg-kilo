@@ -6,7 +6,8 @@
 #include <utility>
 
 #include <pcl_conversions/pcl_conversions.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+// #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 #include "common/timer_utils.hpp"
 #include "common/yaml_helper.hpp"
@@ -15,8 +16,6 @@
 #include "preprocess/lidar_processing.h"
 
 namespace legkilo {
-
-#define THREAD_SLEEP(ms) std::this_thread::sleep_for(std::chrono::milliseconds(ms))
 
 RosInterface::RosInterface(const rclcpp::NodeOptions& options) 
     : Node("leg_kilo_node", options) {
@@ -46,10 +45,6 @@ RosInterface::RosInterface(const rclcpp::NodeOptions& options)
 
 RosInterface::~RosInterface() {
     RCLCPP_INFO(this->get_logger(), "Ros Interface is being Destructed");
-    
-    if (lidar_thread_ && lidar_thread_->joinable()) lidar_thread_->join();
-    if (imu_thread_ && imu_thread_->joinable()) imu_thread_->join();
-    if (kinematic_thread_ && kinematic_thread_->joinable()) kinematic_thread_->join();
 }
 
 bool RosInterface::initParamAndReset(const std::string& config_file) {
@@ -121,72 +116,36 @@ void RosInterface::init(const std::string& config_file) {
 }
 
 void RosInterface::subscribeLidar() {
-    lidar_thread_ = std::make_unique<std::thread>(&RosInterface::lidarLoop, this);
+    lidar_callback_group_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    auto sub_opt = rclcpp::SubscriptionOptions();
+    sub_opt.callback_group = lidar_callback_group_;
+
+    sub_lidar_raw_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
+        options::kLidarTopic, 10,
+        std::bind(&RosInterface::lidarCallBack, this, std::placeholders::_1),
+        sub_opt);
 }
 
 void RosInterface::subscribeImu() {
-    imu_thread_ = std::make_unique<std::thread>(&RosInterface::imuLoop, this);
+    imu_callback_group_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    auto sub_opt = rclcpp::SubscriptionOptions();
+    sub_opt.callback_group = imu_callback_group_;
+
+    sub_imu_raw_ = this->create_subscription<sensor_msgs::msg::Imu>(
+        options::kImuTopic, 100,
+        std::bind(&RosInterface::imuCallBack, this, std::placeholders::_1),
+        sub_opt);
 }
 
 void RosInterface::subscribeKinematicImu() {
-    kinematic_thread_ = std::make_unique<std::thread>(&RosInterface::kinematicImuLoop, this);
-}
-
-
-void RosInterface::lidarLoop() {
-    auto group = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    kinematic_callback_group_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
     auto sub_opt = rclcpp::SubscriptionOptions();
-    sub_opt.callback_group = group;
-
-    sub_lidar_raw_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
-        options::kLidarTopic, 10, 
-        std::bind(&RosInterface::lidarCallBack, this, std::placeholders::_1), 
-        sub_opt);
-
-    rclcpp::executors::SingleThreadedExecutor executor;
-    executor.add_callback_group(group, this->get_node_base_interface());
-    while (rclcpp::ok() && !options::FLAG_EXIT.load()) {
-        executor.spin_some(std::chrono::milliseconds(10));
-    }
-}
-
-void RosInterface::imuLoop() {
-    auto group = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
-    auto sub_opt = rclcpp::SubscriptionOptions();
-    sub_opt.callback_group = group;
-
-    sub_imu_raw_ = this->create_subscription<sensor_msgs::msg::Imu>(
-        options::kImuTopic, 100, 
-        std::bind(&RosInterface::imuCallBack, this, std::placeholders::_1), 
-        sub_opt);
-
-    rclcpp::executors::SingleThreadedExecutor executor;
-    executor.add_callback_group(group, this->get_node_base_interface());
-    while (rclcpp::ok() && !options::FLAG_EXIT.load()) {
-        executor.spin_some(std::chrono::milliseconds(5));
-    }
-}
-
-void RosInterface::kinematicImuLoop() {
-    auto group = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
-    auto sub_opt = rclcpp::SubscriptionOptions();
-    sub_opt.callback_group = group;
-
-    // sub_kinematic_raw_ = this->create_subscription<unitree_legged_msgs::msg::HighState>(
-    // options::kKinematicTopic, 100, 
-    // std::bind(&RosInterface::kinematicImuCallBack, this, std::placeholders::_1), 
-    // sub_opt);
+    sub_opt.callback_group = kinematic_callback_group_;
 
     sub_kinematic_raw_ = this->create_subscription<go2_driver::msg::LegSensor>(
-        options::kKinematicTopic, 100, 
-        std::bind(&RosInterface::kinematicImuCallBack, this, std::placeholders::_1), 
+        options::kKinematicTopic, 100,
+        std::bind(&RosInterface::kinematicImuCallBack, this, std::placeholders::_1),
         sub_opt);
-
-    rclcpp::executors::SingleThreadedExecutor executor;
-    executor.add_callback_group(group, this->get_node_base_interface());
-    while (rclcpp::ok() && !options::FLAG_EXIT.load()) {
-        executor.spin_some(std::chrono::milliseconds(5));
-    }
 }
 
 void RosInterface::lidarCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {

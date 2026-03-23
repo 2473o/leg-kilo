@@ -1,7 +1,7 @@
 root_dir: /home/alex/others/unitree_ws/slam/Leg-KILO
 
 # Topics
-lidar_topic: /utlidar/cloud_decompressed
+lidar_topic: /utlidar/cloud
 imu_topic: /imu
 kinematic_topic: /leg_sensor
 kinematic_type: go2_driver::msg::LegSensor # 占位

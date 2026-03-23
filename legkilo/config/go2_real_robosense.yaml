@@ -1,11 +1,10 @@
 root_dir: /home/alex/others/unitree_ws/slam/Leg-KILO
 
 # Topics
-lidar_topic: /rslidar_points_decompressed
+lidar_topic: /rslidar_points
 imu_topic: /imu
 kinematic_topic: /leg_sensor
 kinematic_type: go2_driver::msg::LegSensor
-
 
 # KI Options
 only_imu_use: false # True: use IMU from <sensor_msgs::Imu>, without kinematics

@@ -75,7 +75,7 @@ void VoxelOctoTree::init_plane(const std::vector<pointWithVar> &points, VoxelPla
     // && evalsReal(evalsMid) > 0.05
     //&& evalsReal(evalsMid) > 0.01
     if (evalsReal(evalsMin) < planer_threshold_) {
-        for (int i = 0; i < points.size(); i++) {
+        for (size_t i = 0; i < points.size(); i++) {
             Eigen::Matrix<double, 6, 3> J;
             Eigen::Matrix3d F;
             for (int m = 0; m < 3; m++) {
@@ -123,7 +123,7 @@ void VoxelOctoTree::init_plane(const std::vector<pointWithVar> &points, VoxelPla
 }
 
 void VoxelOctoTree::init_octo_tree() {
-    if (temp_points_.size() > points_size_threshold_) {
+    if (temp_points_.size() > static_cast<size_t>(points_size_threshold_)) {
         init_plane(temp_points_, plane_ptr_);
         if (plane_ptr_->is_plane_ == true) {
             octo_state_ = 0;
@@ -501,7 +501,9 @@ void VoxelMapManager::pubSinglePlane(visualization_msgs::msg::MarkerArray &plane
     plane.color.r = rgb(0);
     plane.color.g = rgb(1);
     plane.color.b = rgb(2);
-    plane.lifetime = rclcpp::Duration::from_nanoseconds(0);
+    // plane.lifetime = rclcpp::Duration::from_nanoseconds(0);
+    plane.lifetime = rclcpp::Duration(0);
+    
     plane_pub.markers.push_back(plane);
 }
 
