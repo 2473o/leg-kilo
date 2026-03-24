@@ -414,10 +414,12 @@ void RosInterface::run() {
         return;
     }
 
+#ifndef NDEBUG
     RCLCPP_INFO(this->get_logger(), "pcl raw size: %zu  pcl down size: %zu",
                 cloud_raw_->points.size(), cloud_down_body_->points.size());
     RCLCPP_INFO(this->get_logger(), "useful pcl percent: %.2f %%",
                 100.0 * static_cast<double>(success_pts_size) / cloud_down_body_->points.size());
+#endif
 
     this->publishOdomTFPath(end_time);
     this->publishPointcloudWorld(end_time);

@@ -2,7 +2,6 @@
 #include <memory>
 #include <vector>
 #include <string>
-
 #include <unistd.h>
 #include <rclcpp/rclcpp.hpp>
 
@@ -48,10 +47,11 @@ int main(int argc, char** argv) {
 
     // ROS 2: Use init() instead of rosInit()
     ros_interface_node->init(FLAGS_config_file);
-    rclcpp::executors::SingleThreadedExecutor executor;
-    executor.add_node(ros_interface_node);
 
     LOG(INFO) << "Leg KILO Node Starts";
+
+    rclcpp::executors::SingleThreadedExecutor executor;
+    executor.add_node(ros_interface_node);
 
     // ROS 2: Main loop with rclcpp::Rate
     rclcpp::Rate rate(5000);
