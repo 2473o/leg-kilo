@@ -18,8 +18,8 @@ init_time: 0.05
 gravity: 9.81                
 
 # Extrinsic (Transformation  from IMU coordinate  to Lidar coordinate)
-extrinsic_T: [0.29, 0.0, -0.05]
-extrinsic_R: [-0.96, 0.0, 0.26, 0.0, 1.0, 0.0, -0.26, 0.0, -0.96]
+extrinsic_T: [0.315020, 0.0, -0.089145]
+extrinsic_R: [-0.96551223, 0.0, 0.26035769, 0.0, 1.0, 0.0, -0.26035769, 0.0, -0.96551223]
 
 # Lidar Common
 lidar_type: 5   # Velodyne: 1 Ouster: 2 Hesai: 3 Robosense: 4, UTLidar: 5
