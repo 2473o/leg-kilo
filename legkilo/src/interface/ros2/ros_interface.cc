@@ -37,7 +37,7 @@ RosInterface::RosInterface(const rclcpp::NodeOptions& options)
     tf_br_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
 
     odom_world_.header.frame_id = "camera_init";
-    odom_world_.child_frame_id = "base_link";
+    odom_world_.child_frame_id = "base_footprint";
     path_world_.header.frame_id = "camera_init";
     path_world_.header.stamp = this->get_clock()->now();
     pose_path_.header.frame_id = "camera_init";
@@ -363,7 +363,8 @@ void RosInterface::publishOdomTFPath(double end_time) {
     geometry_msgs::msg::TransformStamped t;
     t.header.stamp = ros_time;
     t.header.frame_id = "camera_init";
-    t.child_frame_id = "base_link";
+    t.child_frame_id = "base_footprint";
+
     t.transform.translation.x = odom_world_.pose.pose.position.x;
     t.transform.translation.y = odom_world_.pose.pose.position.y;
     t.transform.translation.z = odom_world_.pose.pose.position.z;
@@ -390,7 +391,7 @@ void RosInterface::publishPointcloudBody(double end_time) {
         sensor_msgs::msg::PointCloud2 pcl_msg;
         pcl::toROSMsg(*cloud_down_body_, pcl_msg);
         pcl_msg.header.stamp = rclcpp::Time(static_cast<uint64_t>(end_time * 1e9));
-        pcl_msg.header.frame_id = "base_link";
+        pcl_msg.header.frame_id = "base_footprint";
         pub_pointcloud_body_->publish(pcl_msg);
     }
 }
