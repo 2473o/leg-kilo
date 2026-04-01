@@ -8,3 +8,7 @@ legkilo/result/PCD/*
 !legkilo/result/PCD/.gitignore
 legkilo/thirdparty/*
 !legkilo/thirdparty/oneapi-tbb-2022.2.0-lin.tgz
+
+build/
+install/
+log/

@@ -35,10 +35,10 @@ RosInterface::RosInterface(const rclcpp::NodeOptions& options)
         pub_joint_state_ = this->create_publisher<sensor_msgs::msg::JointState>("/joint_states", qos);
     }
 
-    tf_br_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
+    tf_br_ = std::make_unique<tf2_ros::TransformBroadcaster>(this);
 
     odom_world_.header.frame_id = "camera_init";
-    odom_world_.child_frame_id = "base_link";
+    odom_world_.child_frame_id = "base_footprint";
     path_world_.header.frame_id = "camera_init";
     path_world_.header.stamp = this->get_clock()->now();
     pose_path_.header.frame_id = "camera_init";
@@ -386,7 +386,8 @@ bool RosInterface::syncPackage() {
 }
 
 void RosInterface::publishOdomTFPath(double end_time) {
-    auto ros_time = rclcpp::Time(static_cast<uint64_t>(end_time * 1e9));
+    auto ros_time = rclcpp::Time(static_cast<int64_t>(end_time * 1e9));
+    auto tf_time = this->get_clock()->now();
 
     // Odometry
     odom_world_.header.stamp = ros_time;
@@ -394,6 +395,7 @@ void RosInterface::publishOdomTFPath(double end_time) {
     odom_world_.pose.pose.position.y = kilo_->getPos()(1);
     odom_world_.pose.pose.position.z = kilo_->getPos()(2);
     q_eigen_ = Eigen::Quaterniond(kilo_->getRot());
+    q_eigen_.normalize();
     odom_world_.pose.pose.orientation.w = q_eigen_.w();
     odom_world_.pose.pose.orientation.x = q_eigen_.x();
     odom_world_.pose.pose.orientation.y = q_eigen_.y();
@@ -402,9 +404,9 @@ void RosInterface::publishOdomTFPath(double end_time) {
 
     // TF
     geometry_msgs::msg::TransformStamped t;
-    t.header.stamp = ros_time;
+    t.header.stamp = tf_time;
     t.header.frame_id = "camera_init";
-    t.child_frame_id = "base_link";
+    t.child_frame_id = "base_footprint";
     t.transform.translation.x = odom_world_.pose.pose.position.x;
     t.transform.translation.y = odom_world_.pose.pose.position.y;
     t.transform.translation.z = odom_world_.pose.pose.position.z;
@@ -431,7 +433,7 @@ void RosInterface::publishPointcloudBody(double end_time) {
         sensor_msgs::msg::PointCloud2 pcl_msg;
         pcl::toROSMsg(*cloud_down_body_, pcl_msg);
         pcl_msg.header.stamp = rclcpp::Time(static_cast<uint64_t>(end_time * 1e9));
-        pcl_msg.header.frame_id = "base_link";
+        pcl_msg.header.frame_id = "base_footprint";
         pub_pointcloud_body_->publish(pcl_msg);
     }
 }
