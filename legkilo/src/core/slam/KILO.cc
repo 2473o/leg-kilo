@@ -21,42 +21,44 @@ namespace legkilo {
 namespace {
 inline bool time_list(PointType& x, PointType& y) { return (x.curvature < y.curvature); }
 
-std::vector<Eigen::Vector3d> toEigenPoints(const PointCloudType& cloud) {
-    std::vector<Eigen::Vector3d> points;
-    points.reserve(cloud.points.size());
-    for (const auto& pt : cloud.points) {
-        if (!std::isfinite(pt.x) || !std::isfinite(pt.y) || !std::isfinite(pt.z)) {
-            continue;
-        }
-        points.emplace_back(pt.x, pt.y, pt.z);
-    }
-    return points;
-}
-
-void transformCloud(const PointCloudType& input, const Eigen::Isometry3d& transform, PointCloudType& output) {
-    output.clear();
-    output.points.resize(input.points.size());
-    Eigen::Matrix3d rot = transform.rotation();
-    Eigen::Vector3d trans = transform.translation();
-
-    #pragma omp parallel for schedule(static)
-    for (size_t i = 0; i < input.points.size(); ++i) {
-        const auto& pt_in = input.points[i];
-        auto& pt_out = output.points[i];
-        Eigen::Vector3d p(pt_in.x, pt_in.y, pt_in.z);
-        Eigen::Vector3d p_out = rot * p + trans;
-        pt_out.x = static_cast<float>(p_out.x());
-        pt_out.y = static_cast<float>(p_out.y());
-        pt_out.z = static_cast<float>(p_out.z());
-        pt_out.intensity = pt_in.intensity;
-        pt_out.curvature = pt_in.curvature;
-        Eigen::Vector3d n(pt_in.normal_x, pt_in.normal_y, pt_in.normal_z);
-        Eigen::Vector3d n_out = rot * n;
-        pt_out.normal_x = static_cast<float>(n_out.x());
-        pt_out.normal_y = static_cast<float>(n_out.y());
-        pt_out.normal_z = static_cast<float>(n_out.z());
-    }
-}
+// 修改说明：以下两个匿名命名空间辅助函数当前未被任何流程调用，会触发 -Wunused-function。
+// 删除的代码仅注释保留，避免直接移除历史实现；同时一并规避未开启 OpenMP 时的 pragma 警告。
+// std::vector<Eigen::Vector3d> toEigenPoints(const PointCloudType& cloud) {
+//     std::vector<Eigen::Vector3d> points;
+//     points.reserve(cloud.points.size());
+//     for (const auto& pt : cloud.points) {
+//         if (!std::isfinite(pt.x) || !std::isfinite(pt.y) || !std::isfinite(pt.z)) {
+//             continue;
+//         }
+//         points.emplace_back(pt.x, pt.y, pt.z);
+//     }
+//     return points;
+// }
+//
+// void transformCloud(const PointCloudType& input, const Eigen::Isometry3d& transform, PointCloudType& output) {
+//     output.clear();
+//     output.points.resize(input.points.size());
+//     Eigen::Matrix3d rot = transform.rotation();
+//     Eigen::Vector3d trans = transform.translation();
+//
+//     #pragma omp parallel for schedule(static)
+//     for (size_t i = 0; i < input.points.size(); ++i) {
+//         const auto& pt_in = input.points[i];
+//         auto& pt_out = output.points[i];
+//         Eigen::Vector3d p(pt_in.x, pt_in.y, pt_in.z);
+//         Eigen::Vector3d p_out = rot * p + trans;
+//         pt_out.x = static_cast<float>(p_out.x());
+//         pt_out.y = static_cast<float>(p_out.y());
+//         pt_out.z = static_cast<float>(p_out.z());
+//         pt_out.intensity = pt_in.intensity;
+//         pt_out.curvature = pt_in.curvature;
+//         Eigen::Vector3d n(pt_in.normal_x, pt_in.normal_y, pt_in.normal_z);
+//         Eigen::Vector3d n_out = rot * n;
+//         pt_out.normal_x = static_cast<float>(n_out.x());
+//         pt_out.normal_y = static_cast<float>(n_out.y());
+//         pt_out.normal_z = static_cast<float>(n_out.z());
+//     }
+// }
 }  // namespace
 
 KILO::KILO(const std::string& config_file) { initializeFromYaml(config_file); }
@@ -111,6 +113,13 @@ void KILO::initializeFromYaml(const std::string& config_file) {
     voxel_map_config.map_sliding_en = yaml_helper.get<bool>("map_sliding_en");
     voxel_map_config.half_map_size = yaml_helper.get<int>("half_map_size");
     voxel_map_config.sliding_thresh = yaml_helper.get<double>("sliding_thresh");
+    
+    // odom_only 以局部里程计为主，若关闭滑窗清理，体素地图会持续扩张并推高常驻内存。
+    // voxel_map_config.map_sliding_en = yaml_helper.get<bool>("map_sliding_en");
+    if (mode_ == common::Mode::OdomOnly && !voxel_map_config.map_sliding_en) {
+        voxel_map_config.map_sliding_en = true;
+        LOG(INFO) << "Force enable map sliding in odom_only mode to bound voxel map memory usage";
+    }
     map_manager_ = std::make_unique<VoxelMapManager>(voxel_map_config);
 
     // Extrinsic
