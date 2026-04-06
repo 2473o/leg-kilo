@@ -1,5 +1,7 @@
 root_dir: /home/alex/others/unitree_ws/slam/Leg-KILO
 
+mode: "slam" # 默认 slam, odom_only(允许里程计/path/tf，不发布点云和保存点云)
+
 # Topics
 lidar_topic: /rslidar_points
 imu_topic: /imu

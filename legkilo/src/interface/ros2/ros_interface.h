@@ -40,6 +40,12 @@ namespace legkilo {
 
 class RosInterface : public rclcpp::Node {
    public:
+
+    enum class Mode {
+        Slam,
+        OdomOnly
+    };
+
     // ROS 2 默认使用 SharedPtr 管理节点
     using SharedPtr = std::shared_ptr<RosInterface>;
 
@@ -131,6 +137,8 @@ class RosInterface : public rclcpp::Node {
 
     size_t success_pts_size = 0;
     bool pub_joint_tf_enable_ = true;
+    
+    Mode mode_ = Mode::Slam;
 };
 
 }  // namespace legkilo

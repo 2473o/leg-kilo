@@ -56,6 +56,9 @@ bool RosInterface::initParamAndReset(const std::string& config_file) {
     YamlHelper yaml_helper(config_file);
 
     /* Topic and options*/
+    const std::string mode = yaml_helper.get<std::string>("mode", "slam");
+    mode_ = (mode == "odom_only") ? Mode::OdomOnly : Mode::Slam;
+
     options::kLidarTopic = yaml_helper.get<std::string>("lidar_topic");
     options::kImuUse = yaml_helper.get<bool>("only_imu_use", true);
     options::kKinAndImuUse = static_cast<bool>(!options::kImuUse);
@@ -102,7 +105,8 @@ bool RosInterface::initParamAndReset(const std::string& config_file) {
     if (save_traj_enable) { traj_saver_ = std::make_unique<TrajectorySaver>(); }
 
     const bool save_pcd_enable = yaml_helper.get<bool>("save_pcd_enable", false);
-    if (save_pcd_enable) { 
+
+    if (save_pcd_enable && mode_ != Mode::OdomOnly) {
         pcd_saver_ = std::make_unique<PcdSaver>(
             yaml_helper.get<int>("pcd_frames_per_file", 100),
             yaml_helper.get<double>("pcd_voxel_leaf_size", 0.1)
@@ -463,11 +467,14 @@ void RosInterface::run() {
                 100.0 * static_cast<double>(success_pts_size) / cloud_down_body_->points.size());
 
     this->publishOdomTFPath(end_time);
-    this->publishPointcloudWorld(end_time);
-    this->publishPointcloudBody(end_time);
+    
+    if (mode_ != Mode::OdomOnly) {
+        this->publishPointcloudWorld(end_time);
+        this->publishPointcloudBody(end_time);
+    }
 
     if (traj_saver_) { traj_saver_->write(end_time, kilo_->getRot(), kilo_->getPos()); }
-    if (pcd_saver_) { pcd_saver_->save(cloud_down_world_); }
+    if (pcd_saver_ && mode_ != Mode::OdomOnly) { pcd_saver_->save(cloud_down_world_); }
 }
 
 }  // namespace legkilo
