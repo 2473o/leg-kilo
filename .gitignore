@@ -12,3 +12,5 @@ legkilo/thirdparty/*
 build/
 install/
 log/
+
+dev

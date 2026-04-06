@@ -56,8 +56,11 @@ bool RosInterface::initParamAndReset(const std::string& config_file) {
     YamlHelper yaml_helper(config_file);
 
     /* Topic and options*/
-    const std::string mode = yaml_helper.get<std::string>("mode", "slam");
-    mode_ = (mode == "odom_only") ? Mode::OdomOnly : Mode::Slam;
+    
+    // 统一复用公共模式解析函数，避免此处与 KILO 内部重复维护字符串转枚举逻辑。
+    // const std::string mode = yaml_helper.get<std::string>("mode", "slam");
+    // mode_ = (mode == "odom_only") ? common::Mode::OdomOnly : common::Mode::Slam;
+    mode_ = common::parseMode(yaml_helper.get<std::string>("mode", "slam"));
 
     options::kLidarTopic = yaml_helper.get<std::string>("lidar_topic");
     options::kImuUse = yaml_helper.get<bool>("only_imu_use", true);
@@ -106,7 +109,8 @@ bool RosInterface::initParamAndReset(const std::string& config_file) {
 
     const bool save_pcd_enable = yaml_helper.get<bool>("save_pcd_enable", false);
 
-    if (save_pcd_enable && mode_ != Mode::OdomOnly) {
+    // odom_only 模式禁止保存点云文件，避免无意义磁盘写入。
+    if (save_pcd_enable && mode_ != common::Mode::OdomOnly) {
         pcd_saver_ = std::make_unique<PcdSaver>(
             yaml_helper.get<int>("pcd_frames_per_file", 100),
             yaml_helper.get<double>("pcd_voxel_leaf_size", 0.1)
@@ -443,9 +447,10 @@ void RosInterface::publishPointcloudBody(double end_time) {
 }
 
 void RosInterface::runReset() {
-    cloud_raw_.reset(new PointCloudType());
-    cloud_down_body_.reset(new PointCloudType());
-    cloud_down_world_.reset(new PointCloudType());
+    // odom_only 模式下不再依赖接口层预分配点云对象，改为仅清空上一帧输出指针。
+    // cloud_raw_.reset(new PointCloudType());
+    cloud_down_body_.reset();
+    cloud_down_world_.reset();
     success_pts_size = 0;
 }
 
@@ -453,28 +458,31 @@ void RosInterface::run() {
     if (!this->syncPackage()) return;
     this->runReset();
 
-    cloud_raw_ = measure_.lidar_scan_.cloud_;
+    // cloud_raw_ = measure_.lidar_scan_.cloud_;
     double end_time = measure_.lidar_scan_.lidar_end_time_;
     
     if (!kilo_->process(measure_, cloud_down_body_, cloud_down_world_, success_pts_size)) {
-        RCLCPP_WARN(this->get_logger(), "KILO processing failed");
+        // RCLCPP_WARN(this->get_logger(), "KILO processing failed");
         return;
     }
 
-    RCLCPP_INFO(this->get_logger(), "pcl raw size: %zu  pcl down size: %zu",
-                cloud_raw_->points.size(), cloud_down_body_->points.size());
-    RCLCPP_INFO(this->get_logger(), "useful pcl percent: %.2f %%",
-                100.0 * static_cast<double>(success_pts_size) / cloud_down_body_->points.size());
+    // RCLCPP_INFO(this->get_logger(), "pcl raw size: %zu  pcl down size: %zu",
+    //             cloud_raw_->points.size(), cloud_down_body_->points.size());
+    // RCLCPP_INFO(this->get_logger(), "useful pcl percent: %.2f %%",
+    //             100.0 * static_cast<double>(success_pts_size) / cloud_down_body_->points.size());
 
+    // odom_only 仍需发布里程计、TF 与路径，因此保留统一发布入口。
     this->publishOdomTFPath(end_time);
     
-    if (mode_ != Mode::OdomOnly) {
+    // odom_only 模式禁止发布点云，减少无意义发布与消息构造开销。
+    if (mode_ != common::Mode::OdomOnly) {
         this->publishPointcloudWorld(end_time);
         this->publishPointcloudBody(end_time);
     }
 
     if (traj_saver_) { traj_saver_->write(end_time, kilo_->getRot(), kilo_->getPos()); }
-    if (pcd_saver_ && mode_ != Mode::OdomOnly) { pcd_saver_->save(cloud_down_world_); }
+    // odom_only 模式禁止保存点云，与初始化阶段的保存器创建条件保持一致。
+    if (pcd_saver_ && mode_ != common::Mode::OdomOnly) { pcd_saver_->save(cloud_down_world_); }
 }
 
 }  // namespace legkilo

@@ -40,12 +40,6 @@ namespace legkilo {
 
 class RosInterface : public rclcpp::Node {
    public:
-
-    enum class Mode {
-        Slam,
-        OdomOnly
-    };
-
     // ROS 2 默认使用 SharedPtr 管理节点
     using SharedPtr = std::shared_ptr<RosInterface>;
 
@@ -131,14 +125,16 @@ class RosInterface : public rclcpp::Node {
     double init_time_ = 0.1;
     bool init_flag_ = true;
 
-    CloudPtr cloud_raw_;
+    // 修改说明：odom_only 模式下不再依赖接口层缓存原始点云，保留历史成员声明注释以避免直接删除代码痕迹。
+    // CloudPtr cloud_raw_;
     CloudPtr cloud_down_body_;
     CloudPtr cloud_down_world_;
 
     size_t success_pts_size = 0;
     bool pub_joint_tf_enable_ = true;
     
-    Mode mode_ = Mode::Slam;
+    // 统一使用 common::Mode，避免接口层与核心层枚举定义漂移。
+    common::Mode mode_ = common::Mode::Slam;
 };
 
 }  // namespace legkilo

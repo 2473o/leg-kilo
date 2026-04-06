@@ -66,6 +66,9 @@ void KILO::initializeFromYaml(const std::string& config_file) {
     YamlHelper yaml_helper(config_file);
 
     // Mode
+    // 统一复用公共模式解析函数，避免此处与 RosInterface 重复维护字符串转枚举逻辑。同 interface/ros2/ros_interface.cc
+    mode_ = common::parseMode(yaml_helper.get<std::string>("mode", "slam"));
+
     imu_mode_only_ = yaml_helper.get<bool>("only_imu_use", true);
 
     // ESKF
@@ -146,7 +149,7 @@ inline void KILO::pointLidarToWorld(const PointType& point_lidar, PointType& poi
 }
 
 bool KILO::predictUpdatePoint(double current_time, size_t idx_i, size_t idx_j, const PointCloudType& cloud_down_body,
-                              PointCloudType& cloud_down_world, size_t& success_pts_size_out) {
+                              PointCloudType* cloud_down_world, size_t& success_pts_size_out) {
     // 1) Predict state
     double dt_cov = current_time - last_state_update_time_;
     eskf_->predict(dt_cov, false, true);
@@ -167,10 +170,13 @@ bool KILO::predictUpdatePoint(double current_time, size_t idx_i, size_t idx_j, c
         cur_pt_var.point_b << cur_pt.x, cur_pt.y, cur_pt.z;
         cur_pt_var.point_i = ext_rot_ * cur_pt_var.point_b + ext_t_;
         cur_pt_var.point_w = eskf_->getRot() * cur_pt_var.point_i + eskf_->getPos();
-        cloud_down_world.points[idx_i + i].x = cur_pt_var.point_w(0);
-        cloud_down_world.points[idx_i + i].y = cur_pt_var.point_w(1);
-        cloud_down_world.points[idx_i + i].z = cur_pt_var.point_w(2);
-        cloud_down_world.points[idx_i + i].intensity = cur_pt.intensity;  // 保留原始强度值
+        // 仅在需要对外发布点云时回填世界系点云，odom_only 下跳过这部分输出写入。
+        if (cloud_down_world != nullptr) {
+            cloud_down_world->points[idx_i + i].x = cur_pt_var.point_w(0);
+            cloud_down_world->points[idx_i + i].y = cur_pt_var.point_w(1);
+            cloud_down_world->points[idx_i + i].z = cur_pt_var.point_w(2);
+            cloud_down_world->points[idx_i + i].intensity = cur_pt.intensity; // 保留u原始强度值
+        }
         calcBodyCov(cur_pt_var.point_b, map_manager_->config_setting_.dept_err_,
                     map_manager_->config_setting_.beam_err_, cur_pt_var.body_var);
         cur_pt_var.point_crossmat << SKEW_SYM_MATRIX(cur_pt_var.point_i);
@@ -257,10 +263,12 @@ bool KILO::predictUpdatePoint(double current_time, size_t idx_i, size_t idx_j, c
         for (size_t i = 0; i < points_size; ++i) {
             // recompute world with updated state and update var
             pv_list[i].point_w = eskf_->getRot() * pv_list[i].point_i + eskf_->getPos();
-            cloud_down_world.points[idx_i + i].x = pv_list[i].point_w(0);
-            cloud_down_world.points[idx_i + i].y = pv_list[i].point_w(1);
-            cloud_down_world.points[idx_i + i].z = pv_list[i].point_w(2);
-            // intensity 已在第一次赋值时设置，此处无需重复
+            // 仅在需要对外发布点云时更新世界系输出缓存，避免 odom_only 下无意义写回。
+            if (cloud_down_world != nullptr) {
+                cloud_down_world->points[idx_i + i].x = pv_list[i].point_w(0);
+                cloud_down_world->points[idx_i + i].y = pv_list[i].point_w(1);
+                cloud_down_world->points[idx_i + i].z = pv_list[i].point_w(2);
+            }
 
             Mat3D rot_extR = eskf_->getRot() * ext_rot_;
             Mat3D rot_crossmat = eskf_->getRot() * pv_list[i].point_crossmat;
@@ -269,6 +277,13 @@ bool KILO::predictUpdatePoint(double current_time, size_t idx_i, size_t idx_j, c
         }
     }
     map_manager_->UpdateVoxelMap(pv_list);
+    if (map_manager_->config_setting_.map_sliding_en) {
+        // 地图更新后同步当前位置，并按配置触发局部滑窗清理。
+        map_manager_->position_last_ = eskf_->getPos();
+        if (map_manager_->needSliding()) {
+            map_manager_->mapSliding();
+        }
+    }
     return effect_num > 0;
 }
 
@@ -357,6 +372,9 @@ bool KILO::process(common::MeasGroup measure, CloudPtr& cloud_down_body_out, Clo
                    size_t& success_pts_size_out) {
     success_pts_size_out = 0;
 
+    // odom_only 仍保留定位与建图所需内部流程，但关闭对外点云输出缓存。
+    const bool need_pointcloud_output = mode_ != common::Mode::OdomOnly;
+
     CloudPtr cloud_raw = measure.lidar_scan_.cloud_;
     auto& imus = measure.imus_;
     auto& kin_imus = measure.kin_imus_;
@@ -372,11 +390,23 @@ bool KILO::process(common::MeasGroup measure, CloudPtr& cloud_down_body_out, Clo
     if (init_flag_) {
         state_initial_->processing(measure, *eskf_);
 
-        cloud_down_world_out.reset(new PointCloudType());
-        this->cloudLidarToWorld(cloud_raw, cloud_down_world_out);
+        CloudPtr initial_cloud_world(new PointCloudType());
+        this->cloudLidarToWorld(cloud_raw, initial_cloud_world);
         map_manager_->feats_down_body_ = cloud_raw;
-        map_manager_->feats_down_world_ = cloud_down_world_out;
+        map_manager_->feats_down_world_ = initial_cloud_world;
         map_manager_->BuildVoxelMap(eskf_->getRot(), eskf_->getRotCov(), eskf_->getPosCov());
+        if (need_pointcloud_output) {
+            cloud_down_body_out = cloud_raw;
+            cloud_down_world_out = initial_cloud_world;
+        } else {
+            // odom_only 首帧仅保留内部建图所需点云，对外输出指针保持为空。
+            cloud_down_body_out.reset();
+            cloud_down_world_out.reset();
+        }
+        
+        // 初始化滑窗参考位置，避免首帧后的第一次更新立即触发整图清理。
+        map_manager_->position_last_ = eskf_->getPos();
+        map_manager_->last_slide_position = map_manager_->position_last_;
 
         auto gravity_vec = eskf_->state().grav_;
         auto bw = eskf_->state().bw_;
@@ -393,20 +423,30 @@ bool KILO::process(common::MeasGroup measure, CloudPtr& cloud_down_body_out, Clo
     }
 
     // Downsampling
+    CloudPtr cloud_down_body(new PointCloudType());
     Timer::measure("Downsampling", [&, this]() {
-        cloud_down_body_out.reset(new PointCloudType());
         voxel_grid_.setInputCloud(cloud_raw);
-        voxel_grid_.filter(*cloud_down_body_out);
+        voxel_grid_.filter(*cloud_down_body);
     });
 
-    // Prepare output container size
-    cloud_down_world_out.reset(new PointCloudType());
-    cloud_down_world_out->points.resize(cloud_down_body_out->points.size());
+    // 按模式决定是否分配 world 输出缓存，避免 odom_only 下额外内存分配。
+    PointCloudType* cloud_down_world_ptr = nullptr;
+    if (need_pointcloud_output) {
+        cloud_down_body_out = cloud_down_body;
+        cloud_down_world_out.reset(new PointCloudType());
+        cloud_down_world_out->points.resize(cloud_down_body->points.size());
+        cloud_down_world_ptr = cloud_down_world_out.get();
+    } else {
+        // cloud_down_body_out = cloud_down_body;
+        // cloud_down_world_out.reset(new PointCloudType());
+        cloud_down_body_out.reset();
+        cloud_down_world_out.reset();
+    }
 
     // State predict/update & Map update
     Timer::measure("State predict/update & Map update", [&, this]() {
         // Sort by per-point time offset (curvature field)
-        auto& pts = cloud_down_body_out->points;
+        auto& pts = cloud_down_body->points;
         std::sort(pts.begin(), pts.end(), time_list);
 
         // Predict/update cycle across time-buckets of equal curvature
@@ -429,7 +469,7 @@ bool KILO::process(common::MeasGroup measure, CloudPtr& cloud_down_body_out, Clo
                 }
             }
 
-            this->predictUpdatePoint(cur_point_time, idx_i, idx_j, *cloud_down_body_out, *cloud_down_world_out,
+            this->predictUpdatePoint(cur_point_time, idx_i, idx_j, *cloud_down_body, cloud_down_world_ptr,
                                      success_pts_size_out);
             idx_i = idx_j;
         }

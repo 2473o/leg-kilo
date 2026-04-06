@@ -3,6 +3,7 @@
 
 #include <sensor_msgs/msg/imu.hpp>
 #include <deque>
+#include <string>
 
 #include "pcl_types.h"
 
@@ -30,6 +31,16 @@ struct MeasGroup {
     std::deque<sensor_msgs::msg::Imu::SharedPtr> imus_;
     std::deque<KinImuMeas> kin_imus_;
 };
+
+enum class Mode {
+    Slam,
+    OdomOnly
+};
+
+// 统一模式字符串解析逻辑，避免 RosInterface 与 KILO 各自维护一份转换分支。
+inline Mode parseMode(const std::string& mode) {
+    return mode == "odom_only" ? Mode::OdomOnly : Mode::Slam;
+}
 
 enum class LidarType { VEL = 1, OUSTER = 2, HESAI = 3, Robosense = 4, UTLidar = 5 };
 
