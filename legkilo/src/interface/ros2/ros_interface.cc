@@ -73,10 +73,10 @@ bool RosInterface::initParamAndReset(const std::string& config_file) {
     first_lidar_time_ = 0.0;
     first_kin_imu_time_ = 0.0;
     
-    // 允许通过配置限制 path 保留点数，避免运行时间越长 path 消息越大。
-    const int path_max_size = yaml_helper.get<int>("path_max_size", 2000);
+    // path_max_size 支持 -1 表示无限长度；其余非法非正值统一回退到 1，避免裁剪逻辑失效。
+    const int path_max_size = yaml_helper.get<int>("path_max_size", 1000);
     // const int path_max_size = yaml_helper.get<int>("path_max_size", 0);
-    path_max_size_ = path_max_size > 0 ? static_cast<size_t>(path_max_size) : static_cast<size_t>(1);
+    path_max_size_ = path_max_size == -1 ? -1 : (path_max_size > 0 ? path_max_size : 1);
     
     if (options::kImuUse) { options::kImuTopic = yaml_helper.get<std::string>("imu_topic"); }
     if (options::kKinAndImuUse) { 
@@ -429,14 +429,11 @@ void RosInterface::publishOdomTFPath(double end_time) {
     // Path
     pose_path_.header.stamp = ros_time;
     pose_path_.pose = odom_world_.pose.pose;
-    path_world_.poses.push_back(pose_path_);
-
-    // 限制 path 历史长度，避免 path_world_.poses 持续增长导致节点与 RViz2 消息体一起膨胀。
-    if (path_world_.poses.size() > path_max_size_) {
-        const size_t overflow_size = path_world_.poses.size() - path_max_size_;
-        // path_world_.poses.push_back(pose_path_);
-        path_world_.poses.erase(path_world_.poses.begin(), path_world_.poses.begin() + overflow_size);
+    // path_max_size_ 为 -1 时不裁剪；否则先裁剪最旧轨迹点，再追加当前位姿。
+    if (path_max_size_ > 0 && path_world_.poses.size() >= static_cast<size_t>(path_max_size_)) {
+        path_world_.poses.erase(path_world_.poses.begin());
     }
+    path_world_.poses.push_back(pose_path_);
     pub_path_->publish(path_world_);
 }
 

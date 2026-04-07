@@ -120,6 +120,12 @@ void KILO::initializeFromYaml(const std::string& config_file) {
         voxel_map_config.map_sliding_en = true;
         LOG(INFO) << "Force enable map sliding in odom_only mode to bound voxel map memory usage";
     }
+    // 修改说明：slam 模式若配置了 half_map_size/sliding_thresh 却未开启滑窗，局部地图参数实际上不会生效，常驻内存仍会继续增长。
+    if (mode_ == common::Mode::Slam && !voxel_map_config.map_sliding_en) {
+        LOG(WARNING) << "Map sliding is disabled in slam mode; half_map_size=" << voxel_map_config.half_map_size
+                     << " and sliding_thresh=" << voxel_map_config.sliding_thresh
+                     << " will not take effect, so resident memory may keep growing";
+    }
     map_manager_ = std::make_unique<VoxelMapManager>(voxel_map_config);
 
     // Extrinsic

@@ -1,14 +1,13 @@
 root_dir: /home/alex/others/unitree_ws/slam/Leg-KILO
 
-mode: "odom_only" # 默认 slam, odom_only(允许里程计/path/tf，不发布点云和保存点云)
+mode: "slam" # 默认 slam, odom_only(允许里程计/path/tf，不发布点云和保存点云)
 
 # Topics
 lidar_topic: /rslidar_points
 imu_topic: /imu
 kinematic_topic: /leg_sensor
 kinematic_type: go2_driver::msg::LegSensor
-path_max_size: 500 # 限制 /path 中保留的位姿数量，避免长时间运行后 path 消息持续膨胀
-
+path_max_size: -1 # 限制 /path 中保留的位姿数量，默认1000，-1 时无限，避免长时间运行后 path 消息持续膨胀
 
 # KI Options
 only_imu_use: false # True: use IMU from <sensor_msgs::Imu>, without kinematics
@@ -43,11 +42,11 @@ sigma_num: 3
 beam_err: 0.2
 dept_err: 0.04
 layer_init_num: [5, 5, 5, 5, 5]
-max_points_num: 50
-map_sliding_en: false # slam 按配置执行；odom_only 下会强制开启局部滑窗，避免体素地图持续涨内存
-# half_map_size: 40 # 体素尺寸 0.5m 时约保留机器人周围 ±20m 地图，避免 ±50m 窗口过大
-half_map_size: 25 # 进一步缩小局部地图窗口；体素尺寸 0.5m 时约保留机器人周围 ±12.5m 地图，继续压低常驻内存
-sliding_thresh: 2.0 # 每移动约 2m 触发一次滑窗清理，降低旧体素长期滞留
+max_points_num: 30 # 50 进一步限制单体素保留点数，降低 temp_points_ 与平面缓存的常驻占用 
+map_sliding_en: true # 修改说明：当前已切回 slam；必须显式开启滑窗，否则 half_map_size/sliding_thresh 不生效
+                     #  slam 按配置执行；odom_only 下会强制开启局部滑窗，避免体素地图持续涨内存
+half_map_size: 20 # 40 体素尺寸 0.5m 时约保留机器人周围 ±20m 地图，避免 ±50m 窗口过大
+sliding_thresh: 1.0 # 2.0 每移动约 1m 触发一次滑窗清理，减少旧体素滞留
 
 # Kinematic/imu
 leg_offset_x: 0.1934
@@ -81,7 +80,7 @@ contact_meas_noise: 0.001
 lidar_point_meas_ratio: 10
 
 # vis
-save_traj_enable: true
-save_pcd_enable: true
+save_traj_enable: false
+save_pcd_enable: false
 pcd_frames_per_file: 100
 pcd_voxel_leaf_size: 0.1
