@@ -52,6 +52,8 @@ bool RosInterface::initParamAndReset(const std::string& config_file) {
     YamlHelper yaml_helper(config_file);
 
     /* Topic and options*/
+    mode_ = common::parseMode(yaml_helper.get<std::string>("mode", "slam"));
+
     options::kLidarTopic = yaml_helper.get<std::string>("lidar_topic");
     options::kImuUse = yaml_helper.get<bool>("only_imu_use", true);
     options::kKinAndImuUse = static_cast<bool>(!options::kImuUse);
@@ -63,6 +65,11 @@ bool RosInterface::initParamAndReset(const std::string& config_file) {
     first_lidar_time_ = 0.0;
     first_kin_imu_time_ = 0.0;
     
+    // path_max_size 支持 -1 表示无限长度；其余非法非正值统一回退到 1，避免裁剪逻辑失效。
+    const int path_max_size = yaml_helper.get<int>("path_max_size", 1000);
+    // const int path_max_size = yaml_helper.get<int>("path_max_size", 0);
+    path_max_size_ = path_max_size == -1 ? -1 : (path_max_size > 0 ? path_max_size : 1);
+
     if (options::kImuUse) { options::kImuTopic = yaml_helper.get<std::string>("imu_topic"); }
     if (options::kKinAndImuUse) { 
         options::kKinematicTopic = yaml_helper.get<std::string>("kinematic_topic");
@@ -98,7 +105,7 @@ bool RosInterface::initParamAndReset(const std::string& config_file) {
     if (save_traj_enable) { traj_saver_ = std::make_unique<TrajectorySaver>(); }
 
     const bool save_pcd_enable = yaml_helper.get<bool>("save_pcd_enable", false);
-    if (save_pcd_enable) { 
+    if (save_pcd_enable && mode_ != common::Mode::OdomOnly) { 
         pcd_saver_ = std::make_unique<PcdSaver>(
             yaml_helper.get<int>("pcd_frames_per_file", 100),
             yaml_helper.get<double>("pcd_voxel_leaf_size", 0.1)
@@ -409,6 +416,10 @@ void RosInterface::publishOdomTFPath(double end_time) {
     // Path
     pose_path_.header.stamp = ros_time;
     pose_path_.pose = odom_world_.pose.pose;
+    // path_max_size_ 为 -1 时不裁剪；否则先裁剪最旧轨迹点，再追加当前位姿。
+    if (path_max_size_ > 0 && path_world_.poses.size() >= static_cast<size_t>(path_max_size_)) {
+        path_world_.poses.erase(path_world_.poses.begin());
+    }
     path_world_.poses.push_back(pose_path_);
     pub_path_->publish(path_world_);
 }
@@ -432,9 +443,10 @@ void RosInterface::publishPointcloudBody(double end_time) {
 }
 
 void RosInterface::runReset() {
-    cloud_raw_.reset(new PointCloudType());
-    cloud_down_body_.reset(new PointCloudType());
-    cloud_down_world_.reset(new PointCloudType());
+    // odom_only 模式下不再依赖接口层预分配点云对象，改为仅清空上一帧输出指针。
+    // cloud_raw_.reset(new PointCloudType());
+    cloud_down_body_.reset();
+    cloud_down_world_.reset();
     success_pts_size = 0;
 }
 
@@ -442,27 +454,31 @@ void RosInterface::run() {
     if (!this->syncPackage()) return;
     this->runReset();
 
-    cloud_raw_ = measure_.lidar_scan_.cloud_;
+    // cloud_raw_ = measure_.lidar_scan_.cloud_;
     double end_time = measure_.lidar_scan_.lidar_end_time_;
     
     if (!kilo_->process(measure_, cloud_down_body_, cloud_down_world_, success_pts_size)) {
-        RCLCPP_WARN(this->get_logger(), "KILO processing failed");
+        // RCLCPP_WARN(this->get_logger(), "KILO processing failed");
         return;
     }
 
-#ifndef NDEBUG
-    RCLCPP_INFO(this->get_logger(), "pcl raw size: %zu  pcl down size: %zu",
-                cloud_raw_->points.size(), cloud_down_body_->points.size());
-    RCLCPP_INFO(this->get_logger(), "useful pcl percent: %.2f %%",
-                100.0 * static_cast<double>(success_pts_size) / cloud_down_body_->points.size());
-#endif
+    // RCLCPP_INFO(this->get_logger(), "pcl raw size: %zu  pcl down size: %zu",
+    //             cloud_raw_->points.size(), cloud_down_body_->points.size());
+    // RCLCPP_INFO(this->get_logger(), "useful pcl percent: %.2f %%",
+    //             100.0 * static_cast<double>(success_pts_size) / cloud_down_body_->points.size());
 
+    // odom_only 仍需发布里程计、TF 与路径，因此保留统一发布入口。
     this->publishOdomTFPath(end_time);
-    this->publishPointcloudWorld(end_time);
-    this->publishPointcloudBody(end_time);
+    
+    // odom_only 模式禁止发布点云，减少无意义发布与消息构造开销。
+    if (mode_ != common::Mode::OdomOnly) {
+        this->publishPointcloudWorld(end_time);
+        this->publishPointcloudBody(end_time);
+    }
 
     if (traj_saver_) { traj_saver_->write(end_time, kilo_->getRot(), kilo_->getPos()); }
-    if (pcd_saver_) { pcd_saver_->save(cloud_down_world_); }
+    // odom_only 模式禁止保存点云，与初始化阶段的保存器创建条件保持一致。
+    if (pcd_saver_ && mode_ != common::Mode::OdomOnly) { pcd_saver_->save(cloud_down_world_); }
 }
 
 }  // namespace legkilo

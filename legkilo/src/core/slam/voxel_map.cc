@@ -49,7 +49,7 @@ void VoxelOctoTree::init_plane(const std::vector<pointWithVar> &points, VoxelPla
     plane->normal_ = Eigen::Vector3d::Zero();
     plane->points_size_ = points.size();
     plane->radius_ = 0;
-    for (auto pv : points) {
+    for (const auto &pv : points) {
         plane->covariance_ += pv.point_w * pv.point_w.transpose();
         plane->center_ += pv.point_w;
     }
@@ -128,7 +128,7 @@ void VoxelOctoTree::init_octo_tree() {
         if (plane_ptr_->is_plane_ == true) {
             octo_state_ = 0;
             // new added
-            if (temp_points_.size() > max_points_num_) {
+            if (temp_points_.size() > static_cast<size_t>(max_points_num_)) {
                 update_enable_ = false;
                 std::vector<pointWithVar>().swap(temp_points_);
                 new_points_ = 0;
@@ -165,17 +165,19 @@ void VoxelOctoTree::cut_octo_tree() {
         leaves_[leafnum]->temp_points_.push_back(temp_points_[i]);
         leaves_[leafnum]->new_points_++;
     }
+    std::vector<pointWithVar>().swap(temp_points_);  // 子节点接管后立即释放父节点缓存，避免分裂后跨层重复持有点云
+    new_points_ = 0;                                 // 父节点计数同步清零，避免后续统计残留
     for (size_t i = 0; i < 8; i++) {
         if (leaves_[i] != nullptr) {
-            if (leaves_[i]->temp_points_.size() > leaves_[i]->points_size_threshold_) {
+            if (leaves_[i]->temp_points_.size() > static_cast<size_t>(leaves_[i]->points_size_threshold_)) {
                 init_plane(leaves_[i]->temp_points_, leaves_[i]->plane_ptr_);
-                if (leaves_[i]->plane_ptr_->is_plane_) {
+                if (leaves_[i]->plane_ptr_->is_plane_ == true) {
                     leaves_[i]->octo_state_ = 0;
                     // new added
-                    if (leaves_[i]->temp_points_.size() > leaves_[i]->max_points_num_) {
+                    if (leaves_[i]->temp_points_.size() > static_cast<size_t>(leaves_[i]->max_points_num_)) {
                         leaves_[i]->update_enable_ = false;
                         std::vector<pointWithVar>().swap(leaves_[i]->temp_points_);
-                        new_points_ = 0;
+                        leaves_[i]->new_points_ = 0;  // 清零子节点new_points_计数
                     }
                 } else {
                     leaves_[i]->octo_state_ = 1;
@@ -192,7 +194,7 @@ void VoxelOctoTree::UpdateOctoTree(const pointWithVar &pv) {
     if (!init_octo_) {
         new_points_++;
         temp_points_.push_back(pv);
-        if (temp_points_.size() > points_size_threshold_) { init_octo_tree(); }
+        if (temp_points_.size() > static_cast<size_t>(points_size_threshold_)) { init_octo_tree(); }
     } else {
         if (plane_ptr_->is_plane_) {
             if (update_enable_) {
@@ -202,7 +204,7 @@ void VoxelOctoTree::UpdateOctoTree(const pointWithVar &pv) {
                     init_plane(temp_points_, plane_ptr_);
                     new_points_ = 0;
                 }
-                if (temp_points_.size() >= max_points_num_) {
+                if (temp_points_.size() >= static_cast<size_t>(max_points_num_)) {
                     update_enable_ = false;
                     std::vector<pointWithVar>().swap(temp_points_);
                     new_points_ = 0;
@@ -235,7 +237,7 @@ void VoxelOctoTree::UpdateOctoTree(const pointWithVar &pv) {
                         init_plane(temp_points_, plane_ptr_);
                         new_points_ = 0;
                     }
-                    if (temp_points_.size() > max_points_num_) {
+                    if (temp_points_.size() > static_cast<size_t>(max_points_num_)) {
                         update_enable_ = false;
                         std::vector<pointWithVar>().swap(temp_points_);
                         new_points_ = 0;
@@ -299,6 +301,7 @@ void VoxelMapManager::BuildVoxelMap(const Eigen::Matrix3d rot, const Eigen::Matr
     std::vector<int> layer_init_num = config_setting_.layer_init_num_;
 
     std::vector<pointWithVar> input_points;
+    input_points.reserve(feats_down_world_->size());  // 预分配容量，减少建图阶段临时扩容带来的额外内存抖动
 
     for (size_t i = 0; i < feats_down_world_->size(); i++) {
         pointWithVar pv;
@@ -317,7 +320,7 @@ void VoxelMapManager::BuildVoxelMap(const Eigen::Matrix3d rot, const Eigen::Matr
 
     uint plsize = input_points.size();
     for (uint i = 0; i < plsize; i++) {
-        const pointWithVar p_v = input_points[i];
+        const pointWithVar &p_v = input_points[i];
         Eigen::Vector3i position = legkilo::voxelKeyFloor(p_v.point_w, voxel_size);
         auto iter = voxel_map_.find(position);
         if (iter != voxel_map_.end()) {
@@ -347,7 +350,7 @@ void VoxelMapManager::UpdateVoxelMap(const std::vector<pointWithVar> &input_poin
     std::vector<int> layer_init_num = config_setting_.layer_init_num_;
     uint plsize = input_points.size();
     for (uint i = 0; i < plsize; i++) {
-        const pointWithVar p_v = input_points[i];
+        const pointWithVar &p_v = input_points[i];
         Eigen::Vector3i position = legkilo::voxelKeyFloor(p_v.point_w, voxel_size);
         auto iter = voxel_map_.find(position);
         if (iter != voxel_map_.end()) {
@@ -394,7 +397,7 @@ void VoxelMapManager::build_single_residual(pointWithVar &pv, const VoxelOctoTre
                 double this_prob = 1.0 / (sqrt(sigma_l)) * exp(-0.5 * dis_to_plane * dis_to_plane / sigma_l);
                 if (this_prob > prob) {
                     prob = this_prob;
-                    pv.normal = plane.normal_;
+                    // pv.normal = plane.normal_;
                     single_ptpl.body_cov_ = pv.body_var;
                     single_ptpl.point_b_ = pv.point_b;
                     single_ptpl.point_w_ = pv.point_w;
@@ -501,9 +504,10 @@ void VoxelMapManager::pubSinglePlane(visualization_msgs::msg::MarkerArray &plane
     plane.color.r = rgb(0);
     plane.color.g = rgb(1);
     plane.color.b = rgb(2);
-    // plane.lifetime = rclcpp::Duration::from_nanoseconds(0);
-    plane.lifetime = rclcpp::Duration(0);
     
+    // foxy api not support
+    // plane.lifetime = rclcpp::Duration::from_nanoseconds(0);
+    plane.lifetime = rclcpp::Duration(0, 0);
     plane_pub.markers.push_back(plane);
 }
 
@@ -556,11 +560,15 @@ void VoxelMapManager::mapJet(double v, double vmin, double vmax, uint8_t &r, uin
     b = (uint8_t)(255 * db);
 }
 
+bool VoxelMapManager::needSliding() const {
+    return (position_last_ - last_slide_position).norm() >= config_setting_.sliding_thresh;
+}
+
 bool VoxelMapManager::mapSliding() {
-    if ((position_last_ - last_slide_position).norm() < config_setting_.sliding_thresh) {
-        // std::cout<<RED<<"[DEBUG]: Last sliding length "<<(position_last_ - last_slide_position).norm()<<RESET<<"\n";
-        return false;
-    }
+    // if ((position_last_ - last_slide_position).norm() < config_setting_.sliding_thresh) {
+    //     // std::cout<<RED<<"[DEBUG]: Last sliding length "<<(position_last_ - last_slide_position).norm()<<RESET<<"\n";
+    //     return false;
+    // }
 
     // get global id now
     last_slide_position = position_last_;

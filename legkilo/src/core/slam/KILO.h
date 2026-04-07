@@ -44,7 +44,7 @@ class KILO {
     bool predictUpdateImu(const sensor_msgs::msg::Imu::SharedPtr& imu);
     bool predictUpdateKinImu(const common::KinImuMeas& kin_imu);
     bool predictUpdatePoint(double current_time, size_t idx_i, size_t idx_j, const PointCloudType& cloud_down_body,
-                            PointCloudType& cloud_down_world, size_t& success_pts_size_out);
+                            PointCloudType* cloud_down_world, size_t& success_pts_size_out);
 
    private:
     // Modules
@@ -54,6 +54,10 @@ class KILO {
 
     // Config/state
     bool imu_mode_only_ = true;  // true: IMU only; false: Kin+IMU
+    
+    // 修改说明：统一使用 common::Mode，避免核心层与接口层枚举定义漂移。
+    common::Mode mode_ = common::Mode::Slam;
+
     double gravity_ = 9.81;
     double acc_norm_ = 1.0;
     double last_state_predict_time_ = 0.0;

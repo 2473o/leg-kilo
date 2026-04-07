@@ -60,20 +60,20 @@ typedef struct pointWithVar {
     Eigen::Vector3d point_b;      // point in the lidar body frame
     Eigen::Vector3d point_i;      // point in the imu body frame
     Eigen::Vector3d point_w;      // point in the world frame
-    Eigen::Matrix3d var_nostate;  // the var removed the state covarience
+    // Eigen::Matrix3d var_nostate;  // the var removed the state covarience 已停用：当前代码路径未使用，先保留注释便于回溯
     Eigen::Matrix3d body_var;
     Eigen::Matrix3d var;
     Eigen::Matrix3d point_crossmat;
-    Eigen::Vector3d normal;
+    // Eigen::Vector3d normal;       // 已停用：当前代码路径未使用，先保留注释便于回溯
     pointWithVar() {
-        var_nostate = Eigen::Matrix3d::Zero();
+        // var_nostate = Eigen::Matrix3d::Zero();
         var = Eigen::Matrix3d::Zero();
         body_var = Eigen::Matrix3d::Zero();
         point_crossmat = Eigen::Matrix3d::Zero();
         point_b = Eigen::Vector3d::Zero();
         point_i = Eigen::Vector3d::Zero();
         point_w = Eigen::Vector3d::Zero();
-        normal = Eigen::Vector3d::Zero();
+        // normal = Eigen::Vector3d::Zero();
     };
 } pointWithVar;
 
@@ -230,6 +230,7 @@ class VoxelMapManager {
 
     void pubVoxelMap(rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr voxel_map_pub);
 
+    bool needSliding() const;
     bool mapSliding();
     void clearMemOutOfMap(const int &x_max, const int &x_min, const int &y_max, const int &y_min, const int &z_max,
                           const int &z_min);

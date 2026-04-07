@@ -1,5 +1,7 @@
 root_dir: /home/alex/others/unitree_ws/slam/Leg-KILO
 
+mode: "odom_only" # 默认 slam, odom_only(允许里程计/path/tf，不发布点云和保存点云)
+
 # Topics
 lidar_topic: /rslidar_points
 imu_topic: /imu
@@ -77,6 +79,6 @@ lidar_point_meas_ratio: 10
 
 # vis
 save_traj_enable: true
-save_pcd_enable: false
+save_pcd_enable: true
 pcd_frames_per_file: 100
 pcd_voxel_leaf_size: 0.1
