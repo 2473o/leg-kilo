@@ -34,7 +34,8 @@ RosInterface::RosInterface(const rclcpp::NodeOptions& options)
         pub_joint_state_ = this->create_publisher<sensor_msgs::msg::JointState>("/joint_states", qos);
     }
 
-    tf_br_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
+    // tf_br_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
+    tf_br_ = std::make_unique<tf2_ros::TransformBroadcaster>(this);
 
     odom_world_.header.frame_id = "camera_init";
     odom_world_.child_frame_id = "base_footprint";
@@ -120,8 +121,12 @@ void RosInterface::subscribeLidar() {
     auto sub_opt = rclcpp::SubscriptionOptions();
     sub_opt.callback_group = lidar_callback_group_;
 
+    // Use SensorDataQoS to handle best-effort publishers (common for point clouds)
+    auto qos = rclcpp::SensorDataQoS();
+    qos.keep_last(10);
+
     sub_lidar_raw_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
-        options::kLidarTopic, 10,
+        options::kLidarTopic, qos,
         std::bind(&RosInterface::lidarCallBack, this, std::placeholders::_1),
         sub_opt);
 }
@@ -131,8 +136,11 @@ void RosInterface::subscribeImu() {
     auto sub_opt = rclcpp::SubscriptionOptions();
     sub_opt.callback_group = imu_callback_group_;
 
+    auto qos = rclcpp::SensorDataQoS();
+    qos.keep_last(100);
+
     sub_imu_raw_ = this->create_subscription<sensor_msgs::msg::Imu>(
-        options::kImuTopic, 100,
+        options::kImuTopic, qos,
         std::bind(&RosInterface::imuCallBack, this, std::placeholders::_1),
         sub_opt);
 }
@@ -149,6 +157,12 @@ void RosInterface::subscribeKinematicImu() {
 }
 
 void RosInterface::lidarCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
+    static bool first_lidar_received = false;
+    if (!first_lidar_received) {
+        RCLCPP_INFO(this->get_logger(), "--- First Lidar message received! ---");
+        first_lidar_received = true;
+    }
+
     std::lock_guard<std::mutex> lock(mutex_);
     double timestamp = rclcpp::Time(msg->header.stamp).seconds();
     static double last_scan_time = timestamp;
@@ -165,7 +179,7 @@ void RosInterface::lidarCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr 
                           << "s (kin_imu - lidar)";
             }
         }
-    }
+   }
 
     Timer::measure("Lidar Processing", [&, this]() {
         if (timestamp < last_scan_time) {
@@ -213,6 +227,12 @@ void RosInterface::imuCallBack(const sensor_msgs::msg::Imu::SharedPtr msg) {
 }
 
 void RosInterface::kinematicImuCallBack(const go2_driver::msg::LegSensor::SharedPtr msg) {
+    static bool first_kin_received = false;
+    if (!first_kin_received) {
+        RCLCPP_INFO(this->get_logger(), "--- First Kinematic message received! ---");
+        first_kin_received = true;
+    }
+
     static go2_driver::msg::LegSensor last_highstate_msg;
 
     if (options::kRedundancy) {
@@ -273,6 +293,12 @@ bool RosInterface::syncPackage() {
     static bool lidar_push_ = false;
     static bool caches_cleared_after_sync_ = false;
     std::lock_guard<std::mutex> lk(mutex_);
+
+    static int print_count = 0;
+    if (print_count++ % 5000 == 0) {
+        RCLCPP_INFO(this->get_logger(), "[syncPackage] cache size - lidar: %zu, kin_imu: %zu, imu: %zu", 
+                    lidar_cache_.size(), kin_imu_cache_.size(), imu_cache_.size());
+    }
 
     if (options::kImuUse) {
         if (lidar_cache_.empty() || imu_cache_.empty()) return false;
@@ -346,13 +372,17 @@ bool RosInterface::syncPackage() {
 
 void RosInterface::publishOdomTFPath(double end_time) {
     auto ros_time = rclcpp::Time(static_cast<uint64_t>(end_time * 1e9));
-
+    auto tf_time  = this->get_clock()->now();
+    
     // Odometry
     odom_world_.header.stamp = ros_time;
     odom_world_.pose.pose.position.x = kilo_->getPos()(0);
     odom_world_.pose.pose.position.y = kilo_->getPos()(1);
     odom_world_.pose.pose.position.z = kilo_->getPos()(2);
+    
     q_eigen_ = Eigen::Quaterniond(kilo_->getRot());
+    q_eigen_.normalize();
+
     odom_world_.pose.pose.orientation.w = q_eigen_.w();
     odom_world_.pose.pose.orientation.x = q_eigen_.x();
     odom_world_.pose.pose.orientation.y = q_eigen_.y();
@@ -361,15 +391,20 @@ void RosInterface::publishOdomTFPath(double end_time) {
 
     // TF
     geometry_msgs::msg::TransformStamped t;
-    t.header.stamp = ros_time;
+    t.header.stamp = tf_time;
     t.header.frame_id = "camera_init";
     t.child_frame_id = "base_footprint";
-
+    
     t.transform.translation.x = odom_world_.pose.pose.position.x;
     t.transform.translation.y = odom_world_.pose.pose.position.y;
     t.transform.translation.z = odom_world_.pose.pose.position.z;
     t.transform.rotation = odom_world_.pose.pose.orientation;
     tf_br_->sendTransform(t);
+
+    static int tf_pub_count = 0;
+    if (tf_pub_count++ % 100 == 0) {
+        RCLCPP_INFO(this->get_logger(), "Publishing TF: camera_init -> base_footprint at time %f", end_time);
+    }
 
     // Path
     pose_path_.header.stamp = ros_time;

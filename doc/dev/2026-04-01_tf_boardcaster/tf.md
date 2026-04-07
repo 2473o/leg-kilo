@@ -3,7 +3,7 @@
 
 合理的TF关系应该是
 ```
-odom → camera_init → base_footprint → base_link
+camera_init/odom → base_footprint → base_link
                                        ↘ imu_link → rslidar 
                                        ↘ utlidar_lidar 
                                        ↘ realsense_cam_link 
