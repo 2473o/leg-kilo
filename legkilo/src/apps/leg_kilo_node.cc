@@ -35,16 +35,20 @@ int main(int argc, char** argv) {
 
     signal(SIGINT, sigHandle);
 
-    // Pass filtered arguments to Logging (which calls gflags parser)
-    std::unique_ptr<legkilo::Logging> logging(new legkilo::Logging(argc_filtered, argv_filtered, "logs"));
+    google::ParseCommandLineFlags(&argc_filtered, &argv_filtered, true);
+
+    if (FLAGS_config_file.empty()) {
+        std::cerr << "YAML configuration file path not provided. Use --config_file=<path>." << std::endl;
+        return -1;
+    }
+
+    const std::string root_dir = legkilo::resolveRootDirFromConfigFile(FLAGS_config_file);
+
+    // Logging uses the resolved root_dir so output follows YAML config when provided.
+    std::unique_ptr<legkilo::Logging> logging(new legkilo::Logging(argc_filtered, argv_filtered, "logs", root_dir));
     
     // ROS 2: Create node with NodeOptions
     auto ros_interface_node = std::make_shared<legkilo::RosInterface>(rclcpp::NodeOptions());
-
-    if (FLAGS_config_file.empty()) {
-        LOG(ERROR) << "YAML configuration file path not provided. Use --config_path=<path>.";
-        return -1;
-    }
 
     // ROS 2: Use init() instead of rosInit()
     ros_interface_node->init(FLAGS_config_file);

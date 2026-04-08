@@ -1,4 +1,4 @@
-﻿#ifndef LEG_KILO_TRAJECTORY_SAVER_HPP
+#ifndef LEG_KILO_TRAJECTORY_SAVER_HPP
 #define LEG_KILO_TRAJECTORY_SAVER_HPP
 
 #include <chrono>
@@ -14,6 +14,7 @@
 #include <boost/filesystem.hpp>
 
 #include "common/eigen_types.hpp"
+#include "common/yaml_helper.hpp"
 
 namespace legkilo {
 
@@ -25,8 +26,8 @@ class TrajectorySaver {
    public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    TrajectorySaver() {
-        const std::string dir = std::string(ROOT_DIR) + "result/traj/";
+    explicit TrajectorySaver(const std::string& root_dir = defaultRootDir()) {
+        const std::string dir = root_dir + "result/traj/";
         if (!ensureDir(dir)) { throw std::runtime_error("Create Trajectory Directory Failed"); }
         filepath_ = makeFilepathWithNow(dir);
         ofs_.open(filepath_, std::ios::out | std::ios::trunc);

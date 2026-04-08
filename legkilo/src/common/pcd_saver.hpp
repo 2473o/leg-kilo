@@ -1,4 +1,4 @@
-﻿#ifndef LEG_KILO_PCD_SAVER_HPP
+#ifndef LEG_KILO_PCD_SAVER_HPP
 #define LEG_KILO_PCD_SAVER_HPP
 
 #include <chrono>
@@ -18,6 +18,7 @@
 #include <boost/filesystem.hpp>
 
 #include "common/pcl_types.h"
+#include "common/yaml_helper.hpp"
 
 namespace legkilo {
 
@@ -27,8 +28,9 @@ class PcdSaver {
    public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    explicit PcdSaver(int frames_per_file = 100, double voxel_leaf_size = 0.1)
-        : frames_per_file_(frames_per_file), voxel_leaf_size_(voxel_leaf_size) {
+    explicit PcdSaver(int frames_per_file = 100, double voxel_leaf_size = 0.1,
+                      const std::string& root_dir = defaultRootDir())
+        : frames_per_file_(frames_per_file), voxel_leaf_size_(voxel_leaf_size), root_dir_(root_dir) {
         if (frames_per_file_ <= 0) frames_per_file_ = 100;
         if (voxel_leaf_size_ <= 0.0) voxel_leaf_size_ = 0.1;
         initSessionDir();
@@ -57,7 +59,7 @@ class PcdSaver {
 
    private:
     void initSessionDir() {
-        const std::string base = std::string(ROOT_DIR) + "result/PCD/";
+        const std::string base = root_dir_ + "result/PCD/";
         ensureDir(base);
         const std::string stamp = nowString();
         session_dir_ = (fs::path(base) / stamp).string();
@@ -135,6 +137,7 @@ class PcdSaver {
     }
 
    private:
+    std::string root_dir_;
     std::string session_dir_;
     size_t file_id_ = 0;
     int frames_per_file_ = 100;

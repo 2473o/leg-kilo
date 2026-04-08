@@ -54,6 +54,8 @@ RosInterface::~RosInterface() {
 
 bool RosInterface::initParamAndReset(const std::string& config_file) {
     YamlHelper yaml_helper(config_file);
+    
+    const std::string root_dir = resolveRootDir(yaml_helper);
 
     /* Topic and options*/
 
@@ -110,7 +112,7 @@ bool RosInterface::initParamAndReset(const std::string& config_file) {
     pub_joint_tf_enable_ = yaml_helper.get<bool>("pub_joint_tf_enable");
 
     const bool save_traj_enable = yaml_helper.get<bool>("save_traj_enable", false);
-    if (save_traj_enable) { traj_saver_ = std::make_unique<TrajectorySaver>(); }
+    if (save_traj_enable) { traj_saver_ = std::make_unique<TrajectorySaver>(root_dir); }
 
     const bool save_pcd_enable = yaml_helper.get<bool>("save_pcd_enable", false);
 
@@ -118,7 +120,8 @@ bool RosInterface::initParamAndReset(const std::string& config_file) {
     if (save_pcd_enable && mode_ != common::Mode::OdomOnly) {
         pcd_saver_ = std::make_unique<PcdSaver>(
             yaml_helper.get<int>("pcd_frames_per_file", 100),
-            yaml_helper.get<double>("pcd_voxel_leaf_size", 0.1)
+            yaml_helper.get<double>("pcd_voxel_leaf_size", 0.1),
+            root_dir
         ); 
     }
 

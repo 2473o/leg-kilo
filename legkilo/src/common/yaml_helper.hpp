@@ -20,6 +20,14 @@ std::ostream& operator<<(std::ostream& os, const std::vector<T>& vec) {
 
 namespace legkilo {
 
+inline std::string normalizeRootDir(const std::string& root_dir) {
+    if (root_dir.empty()) { return std::string(ROOT_DIR); }
+    if (root_dir.back() == '/') { return root_dir; }
+    return root_dir + "/";
+}
+
+inline std::string defaultRootDir() { return normalizeRootDir(std::string(ROOT_DIR)); }
+
 class YamlHelper {
    public:
     YamlHelper() = delete;
@@ -71,6 +79,32 @@ class YamlHelper {
    private:
     YAML::Node yaml_node_;
 };
+
+inline std::string resolveRootDir(const YamlHelper& yaml_helper) {
+    if (!yaml_helper.hasKey("root_dir")) { return defaultRootDir(); }
+
+    const std::string configured_root_dir = yaml_helper.get<std::string>("root_dir", "");
+    if (configured_root_dir.empty()) {
+        LOG(WARNING) << "Key root_dir is empty, fallback to default: " << defaultRootDir();
+        return defaultRootDir();
+    }
+
+    return normalizeRootDir(configured_root_dir);
+}
+
+inline std::string resolveRootDirFromConfigFile(const std::string& config_file) {
+    try {
+        const YAML::Node yaml_node = YAML::LoadFile(config_file);
+        const YAML::Node root_dir_node = yaml_node["root_dir"];
+        if (!root_dir_node || !root_dir_node.IsScalar()) { return defaultRootDir(); }
+
+        const std::string configured_root_dir = root_dir_node.as<std::string>();
+        if (configured_root_dir.empty()) { return defaultRootDir(); }
+        return normalizeRootDir(configured_root_dir);
+    } catch (const std::exception&) {
+        return defaultRootDir();
+    }
+}
 
 }  // namespace legkilo
 #endif  // LEG_KILO_YAML_HELPER_H

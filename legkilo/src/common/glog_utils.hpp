@@ -8,27 +8,29 @@
 #include <glog/logging.h>
 #include <boost/filesystem.hpp>
 
+#include "common/yaml_helper.hpp"
+
 namespace fs = boost::filesystem;
 
 namespace legkilo {
 
 class Logging {
    public:
-    Logging(int argc, char** argv, std::string log_dir);
+    Logging(int argc, char** argv, const std::string& log_dir, const std::string& root_dir = defaultRootDir());
     ~Logging();
-    bool createLogFile(std::string dir);
+    bool createLogFile(const std::string& dir);
     void flushLogFiles();
 };
 
-inline Logging::Logging(int argc, char** argv, std::string log_dir) {
-    log_dir = std::string(ROOT_DIR) + log_dir;
-    if (!createLogFile(log_dir)) { throw std::runtime_error("Create Log File Failed"); }
+inline Logging::Logging(int argc, char** argv, const std::string& log_dir, const std::string& root_dir) {
+    (void)argc;
+    const std::string full_log_dir = root_dir + log_dir;
+    if (!createLogFile(full_log_dir)) { throw std::runtime_error("Create Log File Failed"); }
 
     FLAGS_stderrthreshold = google::INFO;
     FLAGS_colorlogtostderr = true;
     google::InitGoogleLogging(argv[0]);
-    google::ParseCommandLineFlags(&argc, &argv, true);
-    FLAGS_log_dir = log_dir;
+    FLAGS_log_dir = full_log_dir;
 
     std::cout << "\033[33m"
               << "GLOG ON"
@@ -42,7 +44,7 @@ inline Logging::~Logging() {
               << "\033[0m" << std::endl;
 }
 
-inline bool Logging::createLogFile(std::string dir) {
+inline bool Logging::createLogFile(const std::string& dir) {
     if (!fs::exists(dir)) {
         std::cout << "Creating Log File" << std::endl;
         try {
