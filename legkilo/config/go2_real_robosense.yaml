@@ -2,12 +2,18 @@ root_dir: /home/alex/others/unitree_ws/slam/Leg-KILO
 
 mode: "slam" # 默认 slam, odom_only(允许里程计/path/tf，不发布点云和保存点云)
 
-# Topics
+#################### Topics
 lidar_topic: /rslidar_points
 imu_topic: /imu
 kinematic_topic: /leg_sensor
 kinematic_type: go2_driver::msg::LegSensor
+
 path_max_size: -1 # 限制 /path 中保留的位姿数量，默认1000，-1 时无限，避免长时间运行后 path 消息持续膨胀
+
+# camera_init -> base_footprint
+pub_tf_enable: false
+# joint
+pub_joint_tf_enable: false
 
 # KI Options
 only_imu_use: false # True: use IMU from <sensor_msgs::Imu>, without kinematics
@@ -57,7 +63,6 @@ leg_thigh_offset: 0.0465
 # contact_force_threshold_up: 40
 contact_force_threshold_up: 38.79
 contact_force_threshold_down: 60
-pub_joint_tf_enable: false
 
 satu_acc: 35
 satu_gyr: 30

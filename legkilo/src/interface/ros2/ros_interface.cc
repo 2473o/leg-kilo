@@ -28,14 +28,18 @@ RosInterface::RosInterface(const rclcpp::NodeOptions& options)
 
     pub_odom_world_ = this->create_publisher<nav_msgs::msg::Odometry>("/Odometry", qos);
     pub_path_ = this->create_publisher<nav_msgs::msg::Path>("/path", qos);
-    pub_pointcloud_world_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/cloud_registered", qos);
-    pub_pointcloud_body_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/cloud_registered_body", qos);
+
+    if (mode_ == common::Mode::Slam) {
+        pub_pointcloud_world_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/cloud_registered", qos);
+        pub_pointcloud_body_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/cloud_registered_body", qos);
+    }
     
     if (pub_joint_tf_enable_) {
         pub_joint_state_ = this->create_publisher<sensor_msgs::msg::JointState>("/joint_states", qos);
     }
-
-    tf_br_ = std::make_unique<tf2_ros::TransformBroadcaster>(this);
+    if (pub_tf_enable_) {
+        tf_br_ = std::make_unique<tf2_ros::TransformBroadcaster>(this);
+    }
 
     odom_world_.header.frame_id = "camera_init";
     odom_world_.child_frame_id = "base_footprint";
@@ -110,6 +114,8 @@ bool RosInterface::initParamAndReset(const std::string& config_file) {
     lidar_processing_ = std::make_unique<LidarProcessing>(lidar_process_config);
 
     pub_joint_tf_enable_ = yaml_helper.get<bool>("pub_joint_tf_enable");
+    // 新增：读取 pub_tf_enable 配置项，默认值为 true
+    pub_tf_enable_ = yaml_helper.get<bool>("pub_tf_enable", true);
 
     const bool save_traj_enable = yaml_helper.get<bool>("save_traj_enable", false);
     if (save_traj_enable) { traj_saver_ = std::make_unique<TrajectorySaver>(root_dir); }
@@ -296,7 +302,7 @@ void RosInterface::kinematicImuCallBack(const go2_driver::msg::LegSensor::Shared
                 }
             }
         }
-        
+
         if (timestamp < last_timestamp_kin_imu_) {
             RCLCPP_WARN(this->get_logger(), "Time inconsistency detected in Kin. Imu data stream");
             kin_imu_cache_.clear();
@@ -419,15 +425,18 @@ void RosInterface::publishOdomTFPath(double end_time) {
     pub_odom_world_->publish(odom_world_);
 
     // TF
-    geometry_msgs::msg::TransformStamped t;
-    t.header.stamp = tf_time;
-    t.header.frame_id = "camera_init";
-    t.child_frame_id = "base_footprint";
-    t.transform.translation.x = odom_world_.pose.pose.position.x;
-    t.transform.translation.y = odom_world_.pose.pose.position.y;
-    t.transform.translation.z = odom_world_.pose.pose.position.z;
-    t.transform.rotation = odom_world_.pose.pose.orientation;
-    tf_br_->sendTransform(t);
+    // 新增：受 pub_tf_enable_ 限制，仅在开启时发布 TF
+    if (pub_tf_enable_ && tf_br_) {
+        geometry_msgs::msg::TransformStamped t;
+        t.header.stamp = tf_time;
+        t.header.frame_id = "camera_init";
+        t.child_frame_id = "base_footprint";
+        t.transform.translation.x = odom_world_.pose.pose.position.x;
+        t.transform.translation.y = odom_world_.pose.pose.position.y;
+        t.transform.translation.z = odom_world_.pose.pose.position.z;
+        t.transform.rotation = odom_world_.pose.pose.orientation;
+        tf_br_->sendTransform(t);
+    }
 
     // Path
     pose_path_.header.stamp = ros_time;
