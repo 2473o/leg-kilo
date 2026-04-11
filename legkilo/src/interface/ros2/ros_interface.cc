@@ -169,6 +169,7 @@ void RosInterface::lidarLoop() {
     executor.add_callback_group(group, this->get_node_base_interface());
     while (rclcpp::ok() && !options::FLAG_EXIT.load()) {
         executor.spin_some(std::chrono::milliseconds(10));
+        THREAD_SLEEP(10);
     }
 }
 
@@ -186,6 +187,7 @@ void RosInterface::imuLoop() {
     executor.add_callback_group(group, this->get_node_base_interface());
     while (rclcpp::ok() && !options::FLAG_EXIT.load()) {
         executor.spin_some(std::chrono::milliseconds(5));
+        THREAD_SLEEP(10);
     }
 }
 
@@ -208,6 +210,7 @@ void RosInterface::kinematicImuLoop() {
     executor.add_callback_group(group, this->get_node_base_interface());
     while (rclcpp::ok() && !options::FLAG_EXIT.load()) {
         executor.spin_some(std::chrono::milliseconds(5));
+        THREAD_SLEEP(10);
     }
 }
 

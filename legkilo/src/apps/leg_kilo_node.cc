@@ -56,7 +56,7 @@ int main(int argc, char** argv) {
     LOG(INFO) << "Leg KILO Node Starts";
 
     // ROS 2: Main loop with rclcpp::Rate
-    rclcpp::Rate rate(5000);
+    rclcpp::Rate rate(500);
     while (rclcpp::ok() && !legkilo::options::FLAG_EXIT.load()) {
         ros_interface_node->run();
         rate.sleep();
