@@ -1,6 +1,6 @@
-root_dir: /home/alex/others/unitree_ws/slam/Leg-KILO
+root_dir: /home/alex/ros2/nav2_config/logs/legkilo # path to save logs
 
-mode: "slam" # 默认 slam, odom_only(允许里程计/path/tf，不发布点云和保存点云)
+mode: "odom_only" # 默认 slam, odom_only(允许里程计/path/tf，不发布点云和保存点云)
 
 #################### Topics
 lidar_topic: /rslidar_points
@@ -10,20 +10,24 @@ kinematic_type: go2_driver::msg::LegSensor
 
 odom_topic: /odom
 odom_frame_id: odom
+odom_freq: lidar # lidar or imu, default lidar
 base_frame_id: base_link
+lidar_frame_id: rslidar
 
-path_max_size: -1 # 限制 /path 中保留的位姿数量，默认1000，-1 时无限，避免长时间运行后 path 消息持续膨胀
+path_max_size: 1 # 限制 /path 中保留的位姿数量，默认1000，-1 时无限，避免长时间运行后 path 消息持续膨胀
 
-# camera_init -> base_footprint
-pub_tf_enable: false
+# odom_frame_id -> base_frame_id
+pub_tf_enable: true
 # joint
 pub_joint_tf_enable: false
 
 # KI Options
 only_imu_use: false # True: use IMU from <sensor_msgs::Imu>, without kinematics
-                                          # False: use IMU and Kin. from <unitree_legged_msgs/HighState>
+                    # False: use IMU and Kin. from <unitree_legged_msgs/HighState>
+
 redundancy: false # set true for legkilo dataset 
-                                     # (imu/kin publish freq is 500 hz but update freq is only 50 hz )
+                  # (imu/kin publish freq is 500 hz but update freq is only 50 hz )
+
 dynamic_time_adjust_enable: false
 
 # Initialization

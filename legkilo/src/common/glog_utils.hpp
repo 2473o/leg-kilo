@@ -29,7 +29,15 @@ inline Logging::Logging(int argc, char** argv, const std::string& log_dir, const
 
     FLAGS_stderrthreshold = google::INFO;
     FLAGS_colorlogtostderr = true;
+    
+    // 关闭 glog 的默认 30s 缓冲机制，强制立即刷新每一条日志到终端
+    FLAGS_logbufsecs = 0;
+
     google::InitGoogleLogging(argv[0]);
+    
+    // 注册失败信号处理器，使得崩溃时也能打出最后一条完整日志
+    google::InstallFailureSignalHandler();
+
     FLAGS_log_dir = full_log_dir;
 
     std::cout << "\033[33m"

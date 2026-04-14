@@ -22,38 +22,14 @@ RosInterface::RosInterface(const rclcpp::NodeOptions& options)
     : Node("leg_kilo_node", options) {
     
     RCLCPP_INFO(this->get_logger(), "Ros Interface is being Constructed");
-
-    // QoS 设置：在 ROS 2 中，10000 的深度通常对应 KeepLast
-    auto qos = rclcpp::QoS(rclcpp::KeepLast(100)); // 适当减小深度以节省内存
-
-    pub_odom_world_ = this->create_publisher<nav_msgs::msg::Odometry>("/Odometry", qos);
-    pub_path_ = this->create_publisher<nav_msgs::msg::Path>("/path", qos);
-
-    if (mode_ == common::Mode::Slam) {
-        pub_pointcloud_world_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/cloud_registered", qos);
-        pub_pointcloud_body_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/cloud_registered_body", qos);
-    }
-    
-    if (pub_joint_tf_enable_) {
-        pub_joint_state_ = this->create_publisher<sensor_msgs::msg::JointState>("/joint_states", qos);
-    }
-    if (pub_tf_enable_) {
-        tf_br_ = std::make_unique<tf2_ros::TransformBroadcaster>(this);
-    }
-
-    odom_world_.header.frame_id = "camera_init";
-    odom_world_.child_frame_id = "base_footprint";
-    path_world_.header.frame_id = "camera_init";
-    path_world_.header.stamp = this->get_clock()->now();
-    pose_path_.header.frame_id = "camera_init";
 }
 
 RosInterface::~RosInterface() {
     RCLCPP_INFO(this->get_logger(), "Ros Interface is being Destructed");
     
-    if (lidar_thread_ && lidar_thread_->joinable()) lidar_thread_->join();
-    if (imu_thread_ && imu_thread_->joinable()) imu_thread_->join();
-    if (kinematic_thread_ && kinematic_thread_->joinable()) kinematic_thread_->join();
+    options::FLAG_EXIT.store(true);
+    sync_cv_.notify_all();
+    if (process_thread_.joinable()) process_thread_.join();
 }
 
 bool RosInterface::initParamAndReset(const std::string& config_file) {
@@ -69,6 +45,9 @@ bool RosInterface::initParamAndReset(const std::string& config_file) {
     mode_ = common::parseMode(yaml_helper.get<std::string>("mode", "slam"));
 
     options::kLidarTopic = yaml_helper.get<std::string>("lidar_topic");
+    options::kOdomTopic = yaml_helper.get<std::string>("odom_topic", "/Odometry");
+    options::kOdomFrameId = yaml_helper.get<std::string>("odom_frame_id", "camera_init");
+    options::kBaseFrameId = yaml_helper.get<std::string>("base_frame_id", "base_link");
     options::kImuUse = yaml_helper.get<bool>("only_imu_use", true);
     options::kKinAndImuUse = static_cast<bool>(!options::kImuUse);
     options::kRedundancy = yaml_helper.get<bool>("redundancy", false);
@@ -137,86 +116,73 @@ bool RosInterface::initParamAndReset(const std::string& config_file) {
 void RosInterface::init(const std::string& config_file) {
     this->initParamAndReset(config_file);
     
-    this->subscribeLidar();
-    if (options::kImuUse) { this->subscribeImu(); }
-    if (options::kKinAndImuUse) { this->subscribeKinematicImu(); }
-}
+    // QoS 设置：在 ROS 2 中，10000 的深度通常对应 KeepLast
+    auto qos = rclcpp::QoS(rclcpp::KeepLast(100)); // 适当减小深度以节省内存
 
-void RosInterface::subscribeLidar() {
-    lidar_thread_ = std::make_unique<std::thread>(&RosInterface::lidarLoop, this);
-}
+    pub_odom_world_ = this->create_publisher<nav_msgs::msg::Odometry>(options::kOdomTopic, qos);
+    pub_path_ = this->create_publisher<nav_msgs::msg::Path>("/path", qos);
 
-void RosInterface::subscribeImu() {
-    imu_thread_ = std::make_unique<std::thread>(&RosInterface::imuLoop, this);
-}
+    if (mode_ == common::Mode::Slam) {
+        pub_pointcloud_world_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/cloud_registered", qos);
+        pub_pointcloud_body_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/cloud_registered_body", qos);
+    }
+    
+    if (pub_joint_tf_enable_) {
+        pub_joint_state_ = this->create_publisher<sensor_msgs::msg::JointState>("/joint_states", qos);
+    }
+    if (pub_tf_enable_) {
+        tf_br_ = std::make_unique<tf2_ros::TransformBroadcaster>(this);
+    }
 
-void RosInterface::subscribeKinematicImu() {
-    kinematic_thread_ = std::make_unique<std::thread>(&RosInterface::kinematicImuLoop, this);
-}
+    odom_world_.header.frame_id = options::kOdomFrameId;
+    odom_world_.child_frame_id = options::kBaseFrameId;
+    path_world_.header.frame_id = options::kOdomFrameId;
+    path_world_.header.stamp = this->get_clock()->now();
+    pose_path_.header.frame_id = options::kOdomFrameId;
 
-
-void RosInterface::lidarLoop() {
-    auto group = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
     auto sub_opt = rclcpp::SubscriptionOptions();
-    sub_opt.callback_group = group;
-
+    
     sub_lidar_raw_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
         options::kLidarTopic, 10, 
         std::bind(&RosInterface::lidarCallBack, this, std::placeholders::_1), 
         sub_opt);
 
-    rclcpp::executors::SingleThreadedExecutor executor;
-    executor.add_callback_group(group, this->get_node_base_interface());
-    while (rclcpp::ok() && !options::FLAG_EXIT.load()) {
-        executor.spin_some(std::chrono::milliseconds(10));
-        THREAD_SLEEP(10);
+    if (options::kImuUse) {
+        sub_imu_raw_ = this->create_subscription<sensor_msgs::msg::Imu>(
+            options::kImuTopic, 100, 
+            std::bind(&RosInterface::imuCallBack, this, std::placeholders::_1), 
+            sub_opt);
     }
+
+    if (options::kKinAndImuUse) {
+        sub_kinematic_raw_ = this->create_subscription<go2_driver::msg::LegSensor>(
+            options::kKinematicTopic, 100, 
+            std::bind(&RosInterface::kinematicImuCallBack, this, std::placeholders::_1), 
+            sub_opt);
+    }
+
+    process_thread_ = std::thread(&RosInterface::processLoop, this);
 }
 
-void RosInterface::imuLoop() {
-    auto group = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
-    auto sub_opt = rclcpp::SubscriptionOptions();
-    sub_opt.callback_group = group;
-
-    sub_imu_raw_ = this->create_subscription<sensor_msgs::msg::Imu>(
-        options::kImuTopic, 100, 
-        std::bind(&RosInterface::imuCallBack, this, std::placeholders::_1), 
-        sub_opt);
-
-    rclcpp::executors::SingleThreadedExecutor executor;
-    executor.add_callback_group(group, this->get_node_base_interface());
+void RosInterface::processLoop() {
     while (rclcpp::ok() && !options::FLAG_EXIT.load()) {
-        executor.spin_some(std::chrono::milliseconds(5));
-        THREAD_SLEEP(10);
-    }
-}
-
-void RosInterface::kinematicImuLoop() {
-    auto group = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
-    auto sub_opt = rclcpp::SubscriptionOptions();
-    sub_opt.callback_group = group;
-
-    // sub_kinematic_raw_ = this->create_subscription<unitree_legged_msgs::msg::HighState>(
-    // options::kKinematicTopic, 100, 
-    // std::bind(&RosInterface::kinematicImuCallBack, this, std::placeholders::_1), 
-    // sub_opt);
-
-    sub_kinematic_raw_ = this->create_subscription<go2_driver::msg::LegSensor>(
-        options::kKinematicTopic, 100, 
-        std::bind(&RosInterface::kinematicImuCallBack, this, std::placeholders::_1), 
-        sub_opt);
-
-    rclcpp::executors::SingleThreadedExecutor executor;
-    executor.add_callback_group(group, this->get_node_base_interface());
-    while (rclcpp::ok() && !options::FLAG_EXIT.load()) {
-        executor.spin_some(std::chrono::milliseconds(5));
-        THREAD_SLEEP(10);
+        std::unique_lock<std::mutex> lock(mutex_);
+        sync_cv_.wait(lock, [this]() { return new_lidar_data_ || options::FLAG_EXIT.load(); });
+        new_lidar_data_ = false;
+        lock.unlock();
+        this->run();
     }
 }
 
 void RosInterface::lidarCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
-    std::lock_guard<std::mutex> lock(mutex_);
     double timestamp = rclcpp::Time(msg->header.stamp).seconds();
+
+    common::LidarScan lidar_scan;
+    Timer::measure("Lidar Processing", [&, this]() {
+        lidar_processing_->processing(msg, lidar_scan);
+    });
+
+    std::lock_guard<std::mutex> lock(mutex_);
     static double last_scan_time = timestamp;
 
     if (dynamic_time_adjust_enable_) {
@@ -233,25 +199,20 @@ void RosInterface::lidarCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr 
         }
     }
 
-    Timer::measure("Lidar Processing", [&, this]() {
-        if (timestamp < last_scan_time) {
-            RCLCPP_WARN(this->get_logger(), "Time inconsistency detected in Lidar data stream");
-            lidar_cache_.clear();
-        }
+    if (timestamp < last_scan_time) {
+        RCLCPP_WARN(this->get_logger(), "Time inconsistency detected in Lidar data stream");
+        lidar_cache_.clear();
+    }
 
-        common::LidarScan lidar_scan;
-        lidar_processing_->processing(msg, lidar_scan);
-        
-        if (dynamic_time_adjust_enable_ && time_offset_calculated_) {
-            lidar_scan.lidar_end_time_ += lidar_time_offset_;
-            lidar_scan.lidar_begin_time_ += lidar_time_offset_;
-        }
-        
-        lidar_cache_.push_back(lidar_scan);
-        last_scan_time = timestamp;
-    });
-
+    if (dynamic_time_adjust_enable_ && time_offset_calculated_) {
+        lidar_scan.lidar_end_time_ += lidar_time_offset_;
+        lidar_scan.lidar_begin_time_ += lidar_time_offset_;
+    }
+    
+    lidar_cache_.push_back(lidar_scan);
     last_scan_time = timestamp;
+    new_lidar_data_ = true;
+    sync_cv_.notify_one();
 }
 
 void RosInterface::imuCallBack(const sensor_msgs::msg::Imu::SharedPtr msg) {
@@ -275,6 +236,11 @@ void RosInterface::imuCallBack(const sensor_msgs::msg::Imu::SharedPtr msg) {
         imu_cache_.push_back(msg);
         last_imu_msg = *msg;
         last_timestamp_imu_ = timestamp;
+        
+        if (!lidar_cache_.empty() && timestamp >= lidar_cache_.front().lidar_end_time_) {
+            new_lidar_data_ = true;
+            sync_cv_.notify_one();
+        }
     }
 }
 
@@ -289,6 +255,10 @@ void RosInterface::kinematicImuCallBack(const go2_driver::msg::LegSensor::Shared
     }
 
     double timestamp = static_cast<double>(msg->timestamp_ns) * 1e-9;
+    
+    common::KinImuMeas kin_imu_meas;
+    kinematics_->processing(*msg, kin_imu_meas);
+
     {
         std::lock_guard<std::mutex> lock(mutex_);
         
@@ -311,11 +281,14 @@ void RosInterface::kinematicImuCallBack(const go2_driver::msg::LegSensor::Shared
             kin_imu_cache_.clear();
         }
 
-        common::KinImuMeas kin_imu_meas;
-        kinematics_->processing(*msg, kin_imu_meas);
         kin_imu_cache_.push_back(kin_imu_meas);
         last_timestamp_kin_imu_ = timestamp;
         last_highstate_msg = *msg;
+        
+        if (!lidar_cache_.empty() && timestamp >= lidar_cache_.front().lidar_end_time_) {
+            new_lidar_data_ = true;
+            sync_cv_.notify_one();
+        }
     }
 
     if (pub_joint_tf_enable_) {
@@ -432,8 +405,8 @@ void RosInterface::publishOdomTFPath(double end_time) {
     if (pub_tf_enable_ && tf_br_) {
         geometry_msgs::msg::TransformStamped t;
         t.header.stamp = tf_time;
-        t.header.frame_id = "camera_init";
-        t.child_frame_id = "base_footprint";
+        t.header.frame_id = options::kOdomFrameId;
+        t.child_frame_id = options::kBaseFrameId;
         t.transform.translation.x = odom_world_.pose.pose.position.x;
         t.transform.translation.y = odom_world_.pose.pose.position.y;
         t.transform.translation.z = odom_world_.pose.pose.position.z;
@@ -456,7 +429,7 @@ void RosInterface::publishPointcloudWorld(double end_time) {
     sensor_msgs::msg::PointCloud2 pcl_msg;
     pcl::toROSMsg(*cloud_down_world_, pcl_msg);
     pcl_msg.header.stamp = rclcpp::Time(static_cast<uint64_t>(end_time * 1e9));
-    pcl_msg.header.frame_id = "camera_init";
+    pcl_msg.header.frame_id = options::kOdomFrameId;
     pub_pointcloud_world_->publish(pcl_msg);
 }
 
@@ -465,7 +438,7 @@ void RosInterface::publishPointcloudBody(double end_time) {
         sensor_msgs::msg::PointCloud2 pcl_msg;
         pcl::toROSMsg(*cloud_down_body_, pcl_msg);
         pcl_msg.header.stamp = rclcpp::Time(static_cast<uint64_t>(end_time * 1e9));
-        pcl_msg.header.frame_id = "base_footprint";
+        pcl_msg.header.frame_id = options::kBaseFrameId;
         pub_pointcloud_body_->publish(pcl_msg);
     }
 }
@@ -478,8 +451,8 @@ void RosInterface::runReset() {
     success_pts_size = 0;
 }
 
-void RosInterface::run() {
-    if (!this->syncPackage()) return;
+bool RosInterface::run() {
+    if (!this->syncPackage()) return false;
     this->runReset();
 
     // cloud_raw_ = measure_.lidar_scan_.cloud_;
@@ -487,7 +460,7 @@ void RosInterface::run() {
     
     if (!kilo_->process(measure_, cloud_down_body_, cloud_down_world_, success_pts_size)) {
         // RCLCPP_WARN(this->get_logger(), "KILO processing failed");
-        return;
+        return false;
     }
 
     // RCLCPP_INFO(this->get_logger(), "pcl raw size: %zu  pcl down size: %zu",
@@ -507,6 +480,8 @@ void RosInterface::run() {
     if (traj_saver_) { traj_saver_->write(end_time, kilo_->getRot(), kilo_->getPos()); }
     // odom_only 模式禁止保存点云，与初始化阶段的保存器创建条件保持一致。
     if (pcd_saver_ && mode_ != common::Mode::OdomOnly) { pcd_saver_->save(cloud_down_world_); }
+    
+    return true;
 }
 
 }  // namespace legkilo

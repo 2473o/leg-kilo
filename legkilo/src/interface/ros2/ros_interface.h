@@ -1,6 +1,7 @@
 #ifndef LEG_KILO_ROS2_INTERFACE_H
 #define LEG_KILO_ROS2_INTERFACE_H
 
+#include <condition_variable>
 #include <deque>
 #include <memory>
 #include <mutex>
@@ -48,17 +49,12 @@ class RosInterface : public rclcpp::Node {
     ~RosInterface();
 
     void init(const std::string& config_file);
-    void run();
+    bool run();
 
    private:
     bool initParamAndReset(const std::string& config_file);
-    void subscribeLidar();
-    void subscribeKinematicImu();
-    void subscribeImu();
     
-    void lidarLoop();
-    void imuLoop();
-    void kinematicImuLoop();
+    void processLoop();
 
     // ROS 2 回调函数使用 SharedPtr
     void lidarCallBack(const sensor_msgs::msg::PointCloud2::SharedPtr msg);
@@ -93,9 +89,9 @@ class RosInterface : public rclcpp::Node {
     geometry_msgs::msg::PoseStamped pose_path_;
 
     // 子线程
-    std::unique_ptr<std::thread> lidar_thread_;
-    std::unique_ptr<std::thread> imu_thread_;
-    std::unique_ptr<std::thread> kinematic_thread_;
+    std::thread process_thread_;
+    std::condition_variable sync_cv_;
+    bool new_lidar_data_ = false;
 
     // 模块
     std::unique_ptr<LidarProcessing> lidar_processing_;

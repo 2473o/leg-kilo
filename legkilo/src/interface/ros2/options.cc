@@ -13,5 +13,9 @@ std::string kKinematicTopic;
 std::string kKinematicType;
 std::string kImuTopic;
 
+std::string kOdomTopic;
+std::string kOdomFrameId;
+std::string kBaseFrameId;
+
 }  // namespace options
 }  // namespace legkilo

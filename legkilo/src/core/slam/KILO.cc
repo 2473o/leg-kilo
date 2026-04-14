@@ -6,6 +6,7 @@
 #include <thread>
 #include <utility>
 #include <rclcpp/rclcpp.hpp>
+#include <omp.h>
 #include "common/math_utils.hpp"
 
 
@@ -177,6 +178,11 @@ bool KILO::predictUpdatePoint(double current_time, size_t idx_i, size_t idx_j, c
     std::vector<PointToPlane> ptpl_list;
     std::vector<pointWithVar> pv_list(points_size);
     ptpl_list.reserve(points_size);
+
+    std::vector<PointToPlane> ptpl_list_temp(points_size);
+    std::vector<bool> is_success_list(points_size, false);
+
+    #pragma omp parallel for schedule(static)
     for (size_t i = 0; i < points_size; ++i) {
         PointType const& cur_pt = cloud_down_body.points[i + idx_i];
 
@@ -238,9 +244,16 @@ bool KILO::predictUpdatePoint(double current_time, size_t idx_i, size_t idx_j, c
                 }
             }
             if (is_success) {
-                ++success_pts_size_out;
-                ptpl_list.push_back(single_ptpl);
+                ptpl_list_temp[i] = single_ptpl;
+                is_success_list[i] = true;
             }
+        }
+    }
+
+    for (size_t i = 0; i < points_size; ++i) {
+        if (is_success_list[i]) {
+            ++success_pts_size_out;
+            ptpl_list.push_back(ptpl_list_temp[i]);
         }
     }
 
@@ -252,6 +265,8 @@ bool KILO::predictUpdatePoint(double current_time, size_t idx_i, size_t idx_j, c
         obs_shared.pt_h.resize(effect_num, 6);
         obs_shared.pt_R.resize(effect_num);
         obs_shared.pt_z.resize(effect_num);
+        
+        #pragma omp parallel for schedule(static)
         for (size_t k = 0; k < effect_num; ++k) {
             Vec3D crossmat_rotT_u = ptpl_list[k].point_crossmat_ * eskf_->getRot().transpose() * ptpl_list[k].normal_;
             obs_shared.pt_h.row(k) << crossmat_rotT_u(0), crossmat_rotT_u(1), crossmat_rotT_u(2),
@@ -275,6 +290,7 @@ bool KILO::predictUpdatePoint(double current_time, size_t idx_i, size_t idx_j, c
 
     // 4) voxel map update
     if (eskf_update) {
+        #pragma omp parallel for schedule(static)
         for (size_t i = 0; i < points_size; ++i) {
             // recompute world with updated state and update var
             pv_list[i].point_w = eskf_->getRot() * pv_list[i].point_i + eskf_->getPos();

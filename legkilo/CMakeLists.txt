@@ -49,6 +49,7 @@ find_package(yaml-cpp REQUIRED)
 find_package(Glog REQUIRED)
 find_package(go2_driver REQUIRED)
 # find_package(GTSAM REQUIRED)
+find_package(OpenMP REQUIRED)
 
 
 set(dependencies
@@ -105,6 +106,7 @@ target_link_libraries(${PROJECT_NAME}
     yaml-cpp
     glog
     gflags
+    OpenMP::OpenMP_CXX
 )
 
 add_executable(${PROJECT_NAME}_node
@@ -112,7 +114,8 @@ add_executable(${PROJECT_NAME}_node
 )
 ament_target_dependencies(${PROJECT_NAME}_node ${dependencies})
 target_link_libraries(${PROJECT_NAME}_node
-    ${PROJECT_NAME}  
+    ${PROJECT_NAME}
+    OpenMP::OpenMP_CXX
 )
 
 install(TARGETS ${PROJECT_NAME} ${PROJECT_NAME}_node

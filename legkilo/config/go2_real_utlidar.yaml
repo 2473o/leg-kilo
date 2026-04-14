@@ -6,6 +6,10 @@ imu_topic: /imu
 kinematic_topic: /leg_sensor
 kinematic_type: go2_driver::msg::LegSensor # 占位
 
+odom_topic: /odom
+odom_frame_id: odom
+base_frame_id: base_link
+
 # KI Options
 only_imu_use: false # True: use IMU from <sensor_msgs::Imu>, without kinematics
                                           # False: use IMU and Kin. from <unitree_legged_msgs/HighState>

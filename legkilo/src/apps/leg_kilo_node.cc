@@ -4,6 +4,7 @@
 #include <string>
 
 #include <unistd.h>
+#include <omp.h>
 #include <rclcpp/rclcpp.hpp>
 
 #include "common/glog_utils.hpp"
@@ -12,12 +13,13 @@
 
 DEFINE_string(config_file, "config/leg_fusion.yaml", "Path to the YAML file");
 
-void sigHandle(int sig) {
-    legkilo::options::FLAG_EXIT.store(true);
-    LOG(INFO) << "catch sig " << sig << "  FLAG_EXIT = True";
-}
-
 int main(int argc, char** argv) {
+    // 直接通过 OpenMP API 进行控制的指令
+    // 无论全局变量是否提早初始化
+    // 都会强制 OpenMP 运行时根据真实负载动态调节
+    // 释放空闲核心
+    omp_set_dynamic(1);
+
     // ROS 2 initialization with original arguments
     rclcpp::init(argc, argv);
 
@@ -32,8 +34,6 @@ int main(int argc, char** argv) {
     }
     int argc_filtered = static_cast<int>(argv_vec.size());
     char** argv_filtered = argv_vec.data();
-
-    signal(SIGINT, sigHandle);
 
     google::ParseCommandLineFlags(&argc_filtered, &argv_filtered, true);
 
@@ -55,12 +55,9 @@ int main(int argc, char** argv) {
 
     LOG(INFO) << "Leg KILO Node Starts";
 
-    // ROS 2: Main loop with rclcpp::Rate
-    rclcpp::Rate rate(500);
-    while (rclcpp::ok() && !legkilo::options::FLAG_EXIT.load()) {
-        ros_interface_node->run();
-        rate.sleep();
-    }
+    // ROS 2: Main loop with rclcpp::spin
+    rclcpp::spin(ros_interface_node);
+    
     legkilo::options::FLAG_EXIT.store(true);
 
     // Explicitly reset ros_interface_node to ensure proper cleanup
