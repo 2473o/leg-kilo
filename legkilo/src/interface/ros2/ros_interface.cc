@@ -48,6 +48,10 @@ bool RosInterface::initParamAndReset(const std::string& config_file) {
     options::kOdomTopic = yaml_helper.get<std::string>("odom_topic", "/Odometry");
     options::kOdomFrameId = yaml_helper.get<std::string>("odom_frame_id", "camera_init");
     options::kBaseFrameId = yaml_helper.get<std::string>("base_frame_id", "base_link");
+    
+    std::string odom_freq_str = yaml_helper.get<std::string>("odom_freq", "lidar");
+    odom_freq_ = common::parseOdomFreq(odom_freq_str);
+
     options::kImuUse = yaml_helper.get<bool>("only_imu_use", true);
     options::kKinAndImuUse = static_cast<bool>(!options::kImuUse);
     options::kRedundancy = yaml_helper.get<bool>("redundancy", false);
@@ -141,7 +145,7 @@ void RosInterface::init(const std::string& config_file) {
     pose_path_.header.frame_id = options::kOdomFrameId;
 
     auto sub_opt = rclcpp::SubscriptionOptions();
-    
+
     sub_lidar_raw_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
         options::kLidarTopic, 10, 
         std::bind(&RosInterface::lidarCallBack, this, std::placeholders::_1), 
@@ -242,6 +246,10 @@ void RosInterface::imuCallBack(const sensor_msgs::msg::Imu::SharedPtr msg) {
             sync_cv_.notify_one();
         }
     }
+    
+    if (odom_freq_ == common::OdomFreq::Imu && kilo_ && kilo_->isInitialized()) {
+        this->publishOdomTFPath(timestamp);
+    }
 }
 
 void RosInterface::kinematicImuCallBack(const go2_driver::msg::LegSensor::SharedPtr msg) {
@@ -305,6 +313,10 @@ void RosInterface::kinematicImuCallBack(const go2_driver::msg::LegSensor::Shared
             joint_state.velocity.push_back(msg->dq[i]);
         }
         pub_joint_state_->publish(joint_state);
+    }
+    
+    if (odom_freq_ == common::OdomFreq::Imu && kilo_ && kilo_->isInitialized()) {
+        this->publishOdomTFPath(timestamp);
     }
 }
 
@@ -469,7 +481,9 @@ bool RosInterface::run() {
     //             100.0 * static_cast<double>(success_pts_size) / cloud_down_body_->points.size());
 
     // odom_only 仍需发布里程计、TF 与路径，因此保留统一发布入口。
-    this->publishOdomTFPath(end_time);
+    if (odom_freq_ != common::OdomFreq::Imu) {
+        this->publishOdomTFPath(end_time);
+    }
     
     // odom_only 模式禁止发布点云，减少无意义发布与消息构造开销。
     if (mode_ != common::Mode::OdomOnly) {

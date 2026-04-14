@@ -34,6 +34,8 @@ class KILO {
     Vec3D getPos() const;
     Mat3D getRot() const;
 
+    bool isInitialized() const { return !init_flag_; }
+
    private:
     // Initialization and helpers
     void initializeFromYaml(const std::string& config_file);

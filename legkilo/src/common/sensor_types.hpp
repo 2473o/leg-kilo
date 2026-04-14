@@ -42,6 +42,15 @@ inline Mode parseMode(const std::string& mode) {
     return mode == "odom_only" ? Mode::OdomOnly : Mode::Slam;
 }
 
+enum class OdomFreq {
+    Lidar,
+    Imu
+};
+
+inline OdomFreq parseOdomFreq(const std::string& freq) {
+    return freq == "imu" ? OdomFreq::Imu : OdomFreq::Lidar;
+}
+
 enum class LidarType { VEL = 1, OUSTER = 2, HESAI = 3, Robosense = 4, UTLidar = 5 };
 
 }  // namespace common

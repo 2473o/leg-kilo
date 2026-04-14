@@ -14,9 +14,7 @@
 DEFINE_string(config_file, "config/leg_fusion.yaml", "Path to the YAML file");
 
 int main(int argc, char** argv) {
-    // 直接通过 OpenMP API 进行控制的指令
-    // 无论全局变量是否提早初始化
-    // 都会强制 OpenMP 运行时根据真实负载动态调节
+    // 强制 OpenMP 运行时根据真实负载动态调节
     // 释放空闲核心
     omp_set_dynamic(1);
 

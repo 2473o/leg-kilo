@@ -132,6 +132,7 @@ class RosInterface : public rclcpp::Node {
     size_t success_pts_size = 0;
     bool pub_joint_tf_enable_ = true;
     bool pub_tf_enable_ = true;
+    common::OdomFreq odom_freq_ = common::OdomFreq::Lidar;
     
     // 统一使用 common::Mode，避免接口层与核心层枚举定义漂移。
     common::Mode mode_ = common::Mode::Slam;
