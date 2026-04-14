@@ -145,7 +145,6 @@ void RosInterface::init(const std::string& config_file) {
     pose_path_.header.frame_id = options::kOdomFrameId;
 
     auto sub_opt = rclcpp::SubscriptionOptions();
-
     sub_lidar_raw_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
         options::kLidarTopic, 10, 
         std::bind(&RosInterface::lidarCallBack, this, std::placeholders::_1), 
@@ -397,7 +396,6 @@ bool RosInterface::syncPackage() {
 
 void RosInterface::publishOdomTFPath(double end_time) {
     auto ros_time = rclcpp::Time(static_cast<int64_t>(end_time * 1e9));
-    auto tf_time = this->get_clock()->now();
 
     // Odometry
     odom_world_.header.stamp = ros_time;
@@ -416,7 +414,7 @@ void RosInterface::publishOdomTFPath(double end_time) {
     // 新增：受 pub_tf_enable_ 限制，仅在开启时发布 TF
     if (pub_tf_enable_ && tf_br_) {
         geometry_msgs::msg::TransformStamped t;
-        t.header.stamp = tf_time;
+        t.header.stamp = ros_time;
         t.header.frame_id = options::kOdomFrameId;
         t.child_frame_id = options::kBaseFrameId;
         t.transform.translation.x = odom_world_.pose.pose.position.x;
