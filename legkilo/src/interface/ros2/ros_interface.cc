@@ -144,24 +144,31 @@ void RosInterface::init(const std::string& config_file) {
     path_world_.header.stamp = this->get_clock()->now();
     pose_path_.header.frame_id = options::kOdomFrameId;
 
-    auto sub_opt = rclcpp::SubscriptionOptions();
+    auto sub_opt_lidar = rclcpp::SubscriptionOptions();
+    cb_group_lidar_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    sub_opt_lidar.callback_group = cb_group_lidar_;
+    
     sub_lidar_raw_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
         options::kLidarTopic, 10, 
         std::bind(&RosInterface::lidarCallBack, this, std::placeholders::_1), 
-        sub_opt);
+        sub_opt_lidar);
+
+    auto sub_opt_imu = rclcpp::SubscriptionOptions();
+    cb_group_imu_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    sub_opt_imu.callback_group = cb_group_imu_;
 
     if (options::kImuUse) {
         sub_imu_raw_ = this->create_subscription<sensor_msgs::msg::Imu>(
             options::kImuTopic, 100, 
             std::bind(&RosInterface::imuCallBack, this, std::placeholders::_1), 
-            sub_opt);
+            sub_opt_imu);
     }
 
     if (options::kKinAndImuUse) {
         sub_kinematic_raw_ = this->create_subscription<go2_driver::msg::LegSensor>(
             options::kKinematicTopic, 100, 
             std::bind(&RosInterface::kinematicImuCallBack, this, std::placeholders::_1), 
-            sub_opt);
+            sub_opt_imu);
     }
 
     process_thread_ = std::thread(&RosInterface::processLoop, this);

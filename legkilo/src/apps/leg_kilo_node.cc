@@ -53,8 +53,10 @@ int main(int argc, char** argv) {
 
     LOG(INFO) << "Leg KILO Node Starts";
 
-    // ROS 2: Main loop with rclcpp::spin
-    rclcpp::spin(ros_interface_node);
+    // ROS 2: Use MultiThreadedExecutor to prevent lidar callback from blocking IMU callbacks
+    rclcpp::executors::MultiThreadedExecutor executor;
+    executor.add_node(ros_interface_node);
+    executor.spin();
     
     legkilo::options::FLAG_EXIT.store(true);
 

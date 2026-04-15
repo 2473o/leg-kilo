@@ -67,6 +67,10 @@ class RosInterface : public rclcpp::Node {
     void publishPointcloudWorld(double end_time);
     void publishPointcloudBody(double end_time); 
 
+    // ROS 2 回调组，用于多线程执行器
+    rclcpp::CallbackGroup::SharedPtr cb_group_lidar_;
+    rclcpp::CallbackGroup::SharedPtr cb_group_imu_;
+
     // ROS 2 订阅者
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr sub_lidar_raw_;
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr sub_imu_raw_;
