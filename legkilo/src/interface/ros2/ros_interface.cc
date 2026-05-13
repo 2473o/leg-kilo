@@ -79,10 +79,9 @@ bool RosInterface::initParamAndReset(const std::string& config_file) {
     first_lidar_time_ = 0.0;
     first_kin_imu_time_ = 0.0;
     
-    // path_max_size 支持 -1 表示无限长度；其余非法非正值统一回退到 1，避免裁剪逻辑失效。
+    // path_max_size 支持 -1 表示无限长度，0 表示不发布 /path；小于 -1 的非法值回退到 1。
     const int path_max_size = yaml_helper.get<int>("path_max_size", 1000);
-    // const int path_max_size = yaml_helper.get<int>("path_max_size", 0);
-    path_max_size_ = path_max_size == -1 ? -1 : (path_max_size > 0 ? path_max_size : 1);
+    path_max_size_ = path_max_size >= -1 ? path_max_size : 1;
     
     if (options::kImuUse) { options::kImuTopic = yaml_helper.get<std::string>("imu_topic"); }
     if (options::kKinAndImuUse) { 
@@ -439,6 +438,10 @@ void RosInterface::publishOdomTFPath(double end_time) {
     }
 
     // Path
+    if (path_max_size_ == 0) {
+        return;
+    }
+
     pose_path_.header.stamp = ros_time;
     pose_path_.pose = odom_world_.pose.pose;
     // path_max_size_ 为 -1 时不裁剪；否则先裁剪最旧轨迹点，再追加当前位姿。

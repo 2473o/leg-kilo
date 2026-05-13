@@ -11,7 +11,7 @@ def generate_launch_description():
     # Get the package directory
     pkg_share = get_package_share_directory('legkilo')
 
-    lidar_ = "utlidar" # utlidar robosense
+    lidar_ = "robosense" # utlidar robosense
     
     # Declare launch arguments
     config_file_arg = DeclareLaunchArgument(

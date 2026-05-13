@@ -125,7 +125,7 @@ class RosInterface : public rclcpp::Node {
     double init_time_ = 0.1;
     bool init_flag_ = true;
     
-    // path_max_size_ 支持 -1 表示不限制 path 长度，其余非法非正值会在配置读取时回退到 1。
+    // path_max_size_ 支持 -1 表示不限制 path 长度，0 表示不发布 /path。
     int path_max_size_ = 1000;
 
     // 修改说明：odom_only 模式下不再依赖接口层缓存原始点云，保留历史成员声明注释以避免直接删除代码痕迹。

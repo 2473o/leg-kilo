@@ -8,7 +8,7 @@ imu_topic: /imu
 kinematic_topic: /leg_sensor
 kinematic_type: go2_driver::msg::LegSensor
 
-path_max_size: -1 # 限制 /path 中保留的位姿数量，默认1000，-1 时无限，避免长时间运行后 path 消息持续膨胀
+path_max_size: 0 # 限制 /path 中保留的位姿数量，默认1000，-1 时无限，避免长时间运行后 path 消息持续膨胀
 
 # camera_init -> base_footprint
 pub_tf_enable: false
