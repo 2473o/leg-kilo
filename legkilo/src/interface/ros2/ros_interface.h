@@ -69,6 +69,7 @@ class RosInterface : public rclcpp::Node {
     void runReset();
     void publishOdomTFPath(double end_time);
     void publishPointcloudWorld(double end_time);
+    void publishPointcloudDenseWorld(double end_time);
     void publishPointcloudBody(double end_time); 
 
     // ROS 2 订阅者
@@ -79,6 +80,7 @@ class RosInterface : public rclcpp::Node {
     // ROS 2 发布者
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_pointcloud_body_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_pointcloud_world_;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_pointcloud_dense_world_;
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr pub_path_;
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr pub_odom_world_;
     rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr pub_joint_state_;
@@ -132,10 +134,14 @@ class RosInterface : public rclcpp::Node {
     // CloudPtr cloud_raw_;
     CloudPtr cloud_down_body_;
     CloudPtr cloud_down_world_;
+    CloudPtr cloud_dense_world_;
+    CloudPtr cloud_dense_down_world_;
 
     size_t success_pts_size = 0;
     bool pub_joint_tf_enable_ = true;
     bool pub_tf_enable_ = true;
+    bool pub_dense_cloud_enable_ = false;
+    double pub_dense_cloud_voxel_size_ = 0.1;
     
     // 统一使用 common::Mode，避免接口层与核心层枚举定义漂移。
     common::Mode mode_ = common::Mode::Slam;

@@ -33,12 +33,12 @@ class KILO {
 
     Vec3D getPos() const;
     Mat3D getRot() const;
+    void cloudLidarToWorld(const CloudPtr& cloud_lidar, CloudPtr& cloud_world) const;
 
    private:
     // Initialization and helpers
     void initializeFromYaml(const std::string& config_file);
-    void cloudLidarToWorld(const CloudPtr& cloud_lidar, CloudPtr& cloud_world);
-    inline void pointLidarToWorld(const PointType& point_lidar, PointType& point_world);
+    inline void pointLidarToWorld(const PointType& point_lidar, PointType& point_world) const;
 
     // Per-sensor handlers
     bool predictUpdateImu(const sensor_msgs::msg::Imu::SharedPtr& imu);

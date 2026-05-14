@@ -5,6 +5,7 @@
 #include <iostream>
 #include <utility>
 
+#include <pcl/filters/voxel_grid.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
@@ -31,6 +32,8 @@ RosInterface::RosInterface(const rclcpp::NodeOptions& options)
 
     if (mode_ == common::Mode::Slam) {
         pub_pointcloud_world_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/cloud_registered", qos);
+        pub_pointcloud_dense_world_ =
+            this->create_publisher<sensor_msgs::msg::PointCloud2>("/cloud_registered_dense", qos);
         pub_pointcloud_body_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/cloud_registered_body", qos);
     }
     
@@ -115,6 +118,8 @@ bool RosInterface::initParamAndReset(const std::string& config_file) {
     pub_joint_tf_enable_ = yaml_helper.get<bool>("pub_joint_tf_enable");
     // 新增：读取 pub_tf_enable 配置项，默认值为 true
     pub_tf_enable_ = yaml_helper.get<bool>("pub_tf_enable", true);
+    pub_dense_cloud_enable_ = yaml_helper.get<bool>("pub_dense_cloud_enable", false);
+    pub_dense_cloud_voxel_size_ = yaml_helper.get<double>("pub_dense_cloud_voxel_size", 0.1);
 
     const bool save_traj_enable = yaml_helper.get<bool>("save_traj_enable", false);
     if (save_traj_enable) { traj_saver_ = std::make_unique<TrajectorySaver>(root_dir); }
@@ -460,6 +465,16 @@ void RosInterface::publishPointcloudWorld(double end_time) {
     pub_pointcloud_world_->publish(pcl_msg);
 }
 
+void RosInterface::publishPointcloudDenseWorld(double end_time) {
+    if (cloud_dense_world_ && !cloud_dense_world_->points.empty()) {
+        sensor_msgs::msg::PointCloud2 pcl_msg;
+        pcl::toROSMsg(*cloud_dense_world_, pcl_msg);
+        pcl_msg.header.stamp = rclcpp::Time(static_cast<uint64_t>(end_time * 1e9));
+        pcl_msg.header.frame_id = "camera_init";
+        pub_pointcloud_dense_world_->publish(pcl_msg);
+    }
+}
+
 void RosInterface::publishPointcloudBody(double end_time) {
     if (cloud_down_body_ && !cloud_down_body_->points.empty()) {
         sensor_msgs::msg::PointCloud2 pcl_msg;
@@ -475,6 +490,8 @@ void RosInterface::runReset() {
     // cloud_raw_.reset(new PointCloudType());
     cloud_down_body_.reset();
     cloud_down_world_.reset();
+    cloud_dense_world_.reset();
+    cloud_dense_down_world_.reset();
     success_pts_size = 0;
 }
 
@@ -501,6 +518,20 @@ void RosInterface::run() {
     // odom_only 模式禁止发布点云，减少无意义发布与消息构造开销。
     if (mode_ != common::Mode::OdomOnly) {
         this->publishPointcloudWorld(end_time);
+        if (pub_dense_cloud_enable_) {
+            cloud_dense_world_.reset(new PointCloudType());
+            kilo_->cloudLidarToWorld(measure_.lidar_scan_.cloud_, cloud_dense_world_);
+            if (pub_dense_cloud_voxel_size_ > 0.0) {
+                pcl::VoxelGrid<PointType> dense_voxel;
+                cloud_dense_down_world_.reset(new PointCloudType());
+                const float leaf_size = static_cast<float>(pub_dense_cloud_voxel_size_);
+                dense_voxel.setLeafSize(leaf_size, leaf_size, leaf_size);
+                dense_voxel.setInputCloud(cloud_dense_world_);
+                dense_voxel.filter(*cloud_dense_down_world_);
+                cloud_dense_world_ = cloud_dense_down_world_;
+            }
+            this->publishPointcloudDenseWorld(end_time);
+        }
         this->publishPointcloudBody(end_time);
     }
 

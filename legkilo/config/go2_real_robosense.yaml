@@ -10,8 +10,13 @@ kinematic_type: go2_driver::msg::LegSensor
 
 path_max_size: 0 # 限制 /path 中保留的位姿数量，默认1000，-1 时无限，避免长时间运行后 path 消息持续膨胀
 
+# dense cloud
+pub_dense_cloud_enable: true # 仅新增 /cloud_registered_dense 可视化输出，不参与匹配/建图
+pub_dense_cloud_voxel_size: 0.2 # 仅用于 /cloud_registered_dense，可设 0 关闭可视化降采样
+
 # camera_init -> base_footprint
 pub_tf_enable: false
+
 # joint
 pub_joint_tf_enable: false
 
@@ -31,7 +36,7 @@ extrinsic_T: [0.171, 0.0, 0.0908]
 extrinsic_R: [1, 0, 0, 0, 1, 0, 0, 0, 1]
 
 # Lidar Common
-lidar_type: 4   # Velodyne: 1 Ouster: 2 Hesai: 3 Robosense: 4
+lidar_type: 4   # Velodyne: 1 Ouster: 2 Hesai: 3 Robosense: 4, UTLidar: 5
 time_scale: 1e-9 # point sampling time scale relative to [sec]
 blind: 3.0
 filter_num: 3

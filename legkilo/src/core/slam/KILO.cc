@@ -144,7 +144,7 @@ void KILO::initializeFromYaml(const std::string& config_file) {
 Vec3D KILO::getPos() const { return eskf_->getPos(); }
 Mat3D KILO::getRot() const { return eskf_->getRot(); }
 
-void KILO::cloudLidarToWorld(const CloudPtr& cloud_lidar, CloudPtr& cloud_world) {
+void KILO::cloudLidarToWorld(const CloudPtr& cloud_lidar, CloudPtr& cloud_world) const {
     cloud_world->clear();
     cloud_world->points.resize(cloud_lidar->points.size());
     for (size_t i = 0; i < cloud_lidar->points.size(); ++i) {
@@ -152,7 +152,7 @@ void KILO::cloudLidarToWorld(const CloudPtr& cloud_lidar, CloudPtr& cloud_world)
     }
 }
 
-inline void KILO::pointLidarToWorld(const PointType& point_lidar, PointType& point_world) {
+inline void KILO::pointLidarToWorld(const PointType& point_lidar, PointType& point_world) const {
     Eigen::Vector3d pt_lidar(point_lidar.x, point_lidar.y, point_lidar.z);
     Eigen::Vector3d pt_imu = ext_rot_ * pt_lidar + ext_t_;
     Eigen::Vector3d pt_world = eskf_->getRot() * pt_imu + eskf_->getPos();
